@@ -104,9 +104,120 @@
   <script src="chrome://browser/content/global-scripts.js"></script>
   <script src="chrome://browser/content/browser-main.js"></script>
 
-#include aura-integration.xhtml
+  <link rel="stylesheet" href="chrome://browser/content/aura/bubble-tabs.css" />
+  <script src="chrome://browser/content/aura/bubble-tabs.js" />
 </head>
 <html:body xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul">
+  <html:div id="aura-ui-root"></html:div>
+
+  <html:script type="application/javascript"><![CDATA[
+    (function() {
+      const AURA_ENABLED = true;
+      
+      if (!AURA_ENABLED) return;
+      
+      window.addEventListener('load', initAuraBridge, { once: true });
+      
+      function initAuraBridge() {
+        if (window.auraBridgeInitialized) return;
+        window.auraBridgeInitialized = true;
+        
+        console.log('[Aura] Initializing Aura bridge...');
+        
+        if (!window.gBrowser) {
+          console.error('[Aura] gBrowser not available');
+          return;
+        }
+        
+        const auraRoot = document.getElementById('aura-ui-root');
+        if (!auraRoot || typeof AuraBubbleTabs === 'undefined') {
+          console.error('[Aura] Failed: missing root or class');
+          return;
+        }
+        
+        const auraUI = new AuraBubbleTabs({
+          onTabSelect: (tabId) => {
+            const index = parseInt(tabId.replace('tab-', ''));
+            if (gBrowser.tabs[index]) {
+              gBrowser.selectTabAtIndex(index);
+            }
+          },
+          onTabClose: (tabId) => {
+            const index = parseInt(tabId.replace('tab-', ''));
+            const tab = gBrowser.tabs[index];
+            if (tab) {
+              gBrowser.removeTab(tab);
+            }
+          },
+          onNewTab: (url) => {
+            openNewTabWith(url || 'about:newtab');
+          },
+          onTabPin: (tabId, pinned) => {
+            const index = parseInt(tabId.replace('tab-', ''));
+            const tab = gBrowser.tabs[index];
+            if (tab) {
+              if (pinned) {
+                gBrowser.pinTab(tab);
+              } else {
+                gBrowser.unpinTab(tab);
+              }
+            }
+          },
+          onBack: () => {
+            if (window.history.length > 1) {
+              window.history.back();
+            }
+          },
+          onForward: () => {
+            window.history.forward();
+          },
+          onRefresh: () => {
+            BrowserReload();
+          },
+          onExtensions: () => {
+            const btn = document.getElementById('unified-extensions-button');
+            if (btn) btn.click();
+          },
+          onSettings: () => {
+            openPreferences();
+          }
+        });
+        
+        function syncTabs() {
+          const tabs = [];
+          for (let i = 0; i < gBrowser.tabs.length; i++) {
+            const browser = gBrowser.tabs[i];
+            tabs.push({
+              id: 'tab-' + i,
+              title: browser.label || 'New Tab',
+              url: browser.currentURI?.spec || '',
+              favicon: browser.image || null,
+              pinned: browser.pinned || false,
+              loading: browser.getAttribute('busy') === 'true',
+              active: browser.selected
+            });
+          }
+          auraUI.setTabs(tabs);
+        }
+        
+        syncTabs();
+        
+        gBrowser.addEventListener('TabOpen', syncTabs);
+        gBrowser.addEventListener('TabClose', syncTabs);
+        gBrowser.addEventListener('TabSelect', syncTabs);
+        gBrowser.addEventListener('TabPinned', syncTabs);
+        gBrowser.addEventListener('TabUnpinned', syncTabs);
+        
+        const tabsToolbar = document.getElementById('TabsToolbar');
+        if (tabsToolbar) {
+          tabsToolbar.style.display = 'none';
+        }
+        
+        console.log('[Aura] Bridge initialized successfully');
+      }
+    })();
+  ]]></html:script>
+
 # All sets except for popupsets (commands, keys, and stringbundles)
 # *must* go into the browser-sets.inc file so that they can be shared with other
 # top level windows in macWindow.inc.xhtml.
