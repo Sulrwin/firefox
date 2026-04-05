@@ -36,156 +36,20 @@ class AuraBubbleTabs {
   }
 
   createDOM() {
-    const root = document.getElementById('aura-ui-root') || document.body;
-    
-    const ambientBubbles = document.createElement('div');
-    ambientBubbles.className = 'ambient-bubbles';
-    ambientBubbles.id = 'ambient-bubbles';
-    root.appendChild(ambientBubbles);
-
-    this.elements.back = document.createElement('button');
-    this.elements.back.className = 'aura-back';
-    this.elements.back.id = 'aura-back';
-    this.elements.back.setAttribute('aria-label', 'Go back');
-    this.elements.back.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>';
-    root.appendChild(this.elements.back);
-
-    this.elements.forward = document.createElement('button');
-    this.elements.forward.className = 'aura-forward';
-    this.elements.forward.id = 'aura-forward';
-    this.elements.forward.setAttribute('aria-label', 'Go forward');
-    this.elements.forward.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6 6-6"/></svg>';
-    root.appendChild(this.elements.forward);
-
-    this.elements.urlBar = document.createElement('div');
-    this.elements.urlBar.className = 'aura-url-bar';
-    this.elements.urlBar.id = 'aura-url-bar';
-
-    this.elements.refresh = document.createElement('button');
-    this.elements.refresh.className = 'aura-refresh';
-    this.elements.refresh.setAttribute('aria-label', 'Refresh');
-    this.elements.refresh.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>';
-    this.elements.urlBar.appendChild(this.elements.refresh);
-
-    this.elements.urlInput = document.createElement('input');
-    this.elements.urlInput.type = 'text';
-    this.elements.urlInput.className = 'aura-url-input';
-    this.elements.urlInput.id = 'aura-url-input';
-    this.elements.urlInput.placeholder = 'Enter URL...';
-    this.elements.urlBar.appendChild(this.elements.urlInput);
-
-    this.elements.extensions = document.createElement('button');
-    this.elements.extensions.className = 'aura-extensions';
-    this.elements.extensions.setAttribute('aria-label', 'Extensions');
-    this.elements.extensions.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>';
-    this.elements.urlBar.appendChild(this.elements.extensions);
-    root.appendChild(this.elements.urlBar);
-
-    this.elements.trigger = document.createElement('button');
-    this.elements.trigger.className = 'aura-trigger';
-    this.elements.trigger.id = 'aura-trigger';
-    this.elements.trigger.setAttribute('aria-label', 'Open tabs');
-    this.elements.trigger.innerHTML = '<span class="aura-trigger-icon">+</span>';
-    root.appendChild(this.elements.trigger);
-
-    this.elements.container = document.createElement('div');
-    this.elements.container.className = 'aura-bubble-container';
-    this.elements.container.id = 'aura-bubbles';
-
-    this.elements.pinnedGroup = document.createElement('div');
-    this.elements.pinnedGroup.className = 'aura-pinned-group';
-    this.elements.pinnedGroup.id = 'aura-pinned';
-    this.elements.container.appendChild(this.elements.pinnedGroup);
-
-    const separator = document.createElement('div');
-    separator.className = 'aura-separator';
-    this.elements.container.appendChild(separator);
-
-    this.elements.tabGroup = document.createElement('div');
-    this.elements.tabGroup.className = 'aura-tab-group';
-    this.elements.tabGroup.id = 'aura-tabs';
-    this.elements.container.appendChild(this.elements.tabGroup);
-
-    this.elements.addButton = document.createElement('button');
-    this.elements.addButton.className = 'aura-bubble aura-bubble-add';
-    this.elements.addButton.id = 'aura-add-tab';
-    this.elements.addButton.setAttribute('aria-label', 'New tab');
-    this.elements.addButton.innerHTML = '+';
-    this.elements.container.appendChild(this.elements.addButton);
-    root.appendChild(this.elements.container);
-
-    this.elements.newTabBar = document.createElement('div');
-    this.elements.newTabBar.className = 'aura-new-tab-bar';
-    this.elements.newTabBar.id = 'aura-new-tab-bar';
-
-    this.elements.newTabInput = document.createElement('input');
-    this.elements.newTabInput.type = 'text';
-    this.elements.newTabInput.className = 'aura-new-tab-input';
-    this.elements.newTabInput.id = 'aura-new-tab-input';
-    this.elements.newTabInput.placeholder = 'Search or enter URL...';
-    this.elements.newTabBar.appendChild(this.elements.newTabInput);
-    root.appendChild(this.elements.newTabBar);
-
-    this.elements.settings = document.createElement('button');
-    this.elements.settings.className = 'aura-settings';
-    this.elements.settings.id = 'aura-settings';
-    this.elements.settings.setAttribute('aria-label', 'Settings');
-    this.elements.settings.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>';
-    root.appendChild(this.elements.settings);
-
-    if (this.elements.back) {
-      this.elements.back.addEventListener('click', () => {
-        if (this.onBack) this.onBack();
-      });
-    }
-
-    if (this.elements.forward) {
-      this.elements.forward.addEventListener('click', () => {
-        if (this.onForward) this.onForward();
-      });
-    }
-
-    if (this.elements.refresh) {
-      this.elements.refresh.addEventListener('click', () => {
-        if (this.onRefresh) this.onRefresh();
-      });
-    }
-
-    if (this.elements.extensions) {
-      this.elements.extensions.addEventListener('click', () => {
-        if (this.onExtensions) this.onExtensions();
-      });
-    }
-
-    if (this.elements.settings) {
-      this.elements.settings.addEventListener('click', () => {
-        if (this.onSettings) this.onSettings();
-      });
-    }
-
-    // Create ambient background
-    this.createAmbientBubbles();
-  }
-
-  createAmbientBubbles() {
-    const container = document.getElementById('ambient-bubbles');
-    const count = 8;
-    
-    for (let i = 0; i < count; i++) {
-      const bubble = document.createElement('div');
-      bubble.className = 'ambient-bubble';
-      
-      const size = 80 + Math.random() * 180;
-      bubble.style.width = `${size}px`;
-      bubble.style.height = `${size}px`;
-      bubble.style.left = `${Math.random() * 100}%`;
-      bubble.style.top = `${Math.random() * 100}%`;
-      bubble.style.animationDuration = `${25 + Math.random() * 20}s`;
-      bubble.style.animationDelay = `${-Math.random() * 25}s`;
-      bubble.style.opacity = 0.15 + Math.random() * 0.2;
-      
-      container.appendChild(bubble);
-    }
+    this.elements.back = document.getElementById('aura-back');
+    this.elements.forward = document.getElementById('aura-forward');
+    this.elements.refresh = document.getElementById('aura-refresh');
+    this.elements.extensions = document.getElementById('aura-extensions');
+    this.elements.settings = document.getElementById('aura-settings');
+    this.elements.trigger = document.getElementById('aura-trigger');
+    this.elements.container = document.getElementById('aura-bubbles');
+    this.elements.urlBar = document.getElementById('aura-url-bar');
+    this.elements.urlInput = document.getElementById('aura-url-input');
+    this.elements.pinnedGroup = document.getElementById('aura-pinned');
+    this.elements.tabGroup = document.getElementById('aura-tabs');
+    this.elements.addButton = document.getElementById('aura-add-tab');
+    this.elements.newTabBar = document.getElementById('aura-new-tab-bar');
+    this.elements.newTabInput = document.getElementById('aura-new-tab-input');
   }
 
   bindEvents() {
@@ -205,7 +69,14 @@ class AuraBubbleTabs {
 
     this.elements.urlInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && this.elements.urlInput.value.trim()) {
-        const url = this.elements.urlInput.value.trim();
+        let url = this.elements.urlInput.value.trim();
+        if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('about:')) {
+          if (url.includes('.') && !url.includes(' ')) {
+            url = 'https://' + url;
+          } else {
+            url = 'https://www.google.com/search?q=' + encodeURIComponent(url);
+          }
+        }
         parent.postMessage({ type: 'aura-action', action: 'navigate', url }, '*');
       }
     });
@@ -613,7 +484,15 @@ class AuraBubbleTabs {
   }
 
   createNewTab(url) {
-    this.onNewTab(url);
+    let finalUrl = url;
+    if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://') && !finalUrl.startsWith('about:')) {
+      if (finalUrl.includes('.') && !finalUrl.includes(' ')) {
+        finalUrl = 'https://' + finalUrl;
+      } else {
+        finalUrl = 'https://www.google.com/search?q=' + encodeURIComponent(finalUrl);
+      }
+    }
+    this.onNewTab(finalUrl);
     this.hideNewTabBar();
   }
 

@@ -1,17 +1,19 @@
-/* Protocal Aura - Living Glassy Bubbles */
+/* Protocol Aura - Living Glassy Bubbles */
 
 :root {
   --bubble-size: 56px;
   --bubble-pinned-size: 42px;
 }
 
-* { margin: 0; padding: 0; box-sizing: border-box; }
-
-body {
+#aura-ui-root {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2147483646;
   font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-  background: linear-gradient(135deg, #0d0d1a 0%, #1a1a2e 50%, #0f0f1a 100%);
-  min-height: 100vh;
-  overflow-x: hidden;
 }
 
 body.dragging-tabs {
@@ -26,6 +28,7 @@ body.dragging-tabs {
   left: 0;
   top: 50%;
   transform: translateY(-50%);
+  pointer-events: auto;
   width: 36px;
   height: 36px;
   margin-left: 12px;
@@ -64,6 +67,7 @@ body.dragging-tabs {
   right: 0;
   top: 50%;
   transform: translateY(-50%);
+  pointer-events: auto;
   width: 36px;
   height: 36px;
   margin-right: 12px;
@@ -100,20 +104,19 @@ body.dragging-tabs {
 .aura-trigger {
   position: fixed;
   top: 0;
-  left: 0;
-  right: 0;
+  left: 50%;
+  transform: translateX(-50%);
   width: 80px;
   height: 20px;
-  margin: 0 auto;
   border-radius: 0 0 12px 12px;
   background: rgba(255, 255, 255, 0.25);
   border: none;
   border-top: 1px solid rgba(255, 255, 255, 0.3);
   cursor: pointer;
   transition: opacity 300ms ease, height 200ms ease, width 200ms ease, background 200ms ease;
-  z-index: 1000;
-  opacity: 0;
-  pointer-events: none;
+  z-index: 2000;
+  opacity: 0.8;
+  pointer-events: auto;
 }
 
 .aura-trigger:hover {
@@ -158,11 +161,6 @@ body.dragging-tabs {
   z-index: 1000;
 }
 
-.aura-url-bar.visible {
-  opacity: 1;
-  pointer-events: auto;
-}
-
 .aura-url-input {
   width: 300px;
   height: 36px;
@@ -173,6 +171,7 @@ body.dragging-tabs {
   color: white;
   font-size: 14px;
   outline: none;
+  pointer-events: auto;
 }
 
 .aura-url-input:focus {
@@ -214,12 +213,7 @@ body.dragging-tabs {
   opacity: 0;
   pointer-events: none;
   transition: opacity 300ms ease, transform 300ms ease;
-  z-index: 1000;
-}
-
-.aura-bubble-container.visible {
-  opacity: 1;
-  pointer-events: auto;
+  z-index: 2000;
 }
 
 .aura-pinned-group, .aura-tab-group {
@@ -254,6 +248,8 @@ body.dragging-tabs {
   background: rgba(255, 255, 255, 0.15);
   border: 1px solid rgba(255, 255, 255, 0.3);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3), inset 0 0 20px rgba(255, 255, 255, 0.1);
+  pointer-events: auto;
+  flex-shrink: 0;
 }
 
 @keyframes bubbleAppear {
@@ -357,6 +353,10 @@ body.dragging-tabs {
 }
 
 .aura-new-tab-input {
+  pointer-events: auto;
+}
+
+.aura-new-tab-input {
   width: 400px;
   height: 48px;
   padding: 0 24px;
@@ -431,10 +431,10 @@ body.dragging-tabs {
 /* === Settings Button === */
 .aura-settings {
   position: fixed;
-  bottom: 20px;
+  top: 20px;
   right: 20px;
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.15);
@@ -486,26 +486,27 @@ body.dragging-tabs {
 /* === Welcome Content === */
 .demo-content {
   position: fixed;
-  top: 50%;
+  bottom: 200px;
   left: 50%;
-  transform: translate(-50%, -50%);
+  transform: translateX(-50%);
   text-align: center;
   z-index: 1;
 }
 
 .demo-content h1 {
-  font-size: 3rem;
+  font-size: 1.2rem;
   font-weight: 300;
-  letter-spacing: 0.5em;
-  margin-bottom: 1rem;
+  letter-spacing: 0.3em;
+  margin-bottom: 0.5rem;
   background: linear-gradient(135deg, #6366f1, #8b5cf6);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  opacity: 0.7;
 }
 
 .demo-content p {
-  font-size: 1rem;
-  opacity: 0.6;
+  font-size: 0.85rem;
+  opacity: 0.5;
   color: white;
 }

@@ -104,17 +104,41 @@
   <script src="chrome://browser/content/global-scripts.js"></script>
   <script src="chrome://browser/content/browser-main.js"></script>
   <script src="chrome://browser/content/aura/aura-bridge.js"/>
+  <script src="chrome://browser/content/aura/aura-tabs.js"/>
   <script src="chrome://browser/content/aura/aura-ui-init.js"/>
   
   <html:style>
     #navigator-toolbox, #TabsToolbar, #titlebar, #browser-bottombox, #page-titlebar,
     #urlbar-container, #nav-bar-customization-target, #toolbar-menubar,
-    #sidebar-box, #browser { display: none !important; }
+    #sidebar-box { display: none !important; }
     #main-window { background: transparent !important; }
+    
+    #aura-ui-root {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 2147483646;
+      pointer-events: none;
+    }
+    
+    #aura-ui-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 2147483645;
+      pointer-events: none;
+    }
   </html:style>
+  
+  <link rel="stylesheet" href="chrome://browser/content/aura/aura-tabs.css"/>
 </head>
-<html:body xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul">
-  <html:div id="aura-ui-root" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 2147483647; pointer-events: auto;"></html:div>
+  <html:body xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul">
+  <html:div id="aura-ui-root"></html:div>
+  <html:div id="aura-ui-overlay"></html:div>
 
 # All sets except for popupsets (commands, keys, and stringbundles)
 # *must* go into the browser-sets.inc file so that they can be shared with other

@@ -16,8 +16,13 @@
 
   <div id="aura-ui-root"></div>
 
+  <div id="aura-click-layer"></div>
+
   <script src="chrome://browser/content/aura/aura-tabs.js"></script>
   <script>
+    const clickLayer = document.getElementById('aura-click-layer');
+    clickLayer.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; height: 150px; z-index: 999; pointer-events: auto;';
+
     for (let i = 0; i < 10; i++) {
       const bg = document.getElementById('bg-bubbles');
       const b = document.createElement('div');
@@ -53,9 +58,13 @@
       auraTabs.render();
     };
 
-    auraTabs.setTabs([
-      { id: 'tab-1', title: 'Home', favicon: null, pinned: false, loading: false, active: true }
-    ]);
+    auraTabs.setTabs([]);
+
+    window.addEventListener('message', function(e) {
+      if (e.data && e.data.type === 'syncTabs') {
+        auraTabs.setTabs(e.data.tabs);
+      }
+    });
   </script>
 </body>
 </html>

@@ -32,36 +32,57 @@
       const action = data.action;
       const url = data.url;
       const tabId = data.tabId;
+      const pinned = data.pinned;
       const index = tabId ? parseInt(tabId.replace('tab-', '')) : -1;
-      const tab = index >= 0 ? gBrowser.tabs[index] : null;
+      const tab = index >= 0 && index < gBrowser.tabs.length ? gBrowser.tabs[index] : null;
 
       switch (action) {
         case 'selectTab':
-          if (tab) gBrowser.selectedTab = tab;
-          break;
-        case 'closeTab':
-          if (tab) gBrowser.removeTab(tab);
-          break;
-        case 'newTab':
-          console.log('[Aura] Opening:', url);
-          openTrustedLinkIn(url || 'about:newtab', 'tab');
-          break;
-        case 'navigate':
-          if (url) {
-            console.log('[Aura] Navigating to:', url);
-            openTrustedLinkIn(url, 'current');
+          if (tab) {
+            gBrowser.selectedTab = tab;
           }
           break;
-        case 'back':
-          gBrowser.goBack();
+        case 'closeTab':
+          if (tab) {
+            gBrowser.removeTab(tab);
+          }
           break;
-        case 'forward':
-          gBrowser.goForward();
+        case 'newTab':
+          console.log('[Aura] Opening new tab:', url);
+          gBrowser.selectedTab = gBrowser.addTrustedTab(url || 'about:newtab');
+          break;
+        case 'navigate':
+          if (url && gBrowser.selectedBrowser) {
+            console.log('[Aura] Navigating to:', url);
+            gBrowser.selectedBrowser.loadURI(url);
+          }
+          break;
+        case 'goBack':
+          if (gBrowser.selectedBrowser?.canGoBack) {
+            gBrowser.selectedBrowser.goBack();
+          }
+          break;
+        case 'goForward':
+          if (gBrowser.selectedBrowser?.canGoForward) {
+            gBrowser.selectedBrowser.goForward();
+          }
           break;
         case 'refresh':
-          BrowserReload();
+          if (gBrowser.selectedBrowser) {
+            gBrowser.selectedBrowser.reload();
+          }
           break;
-        case 'settings':
+        case 'pinTab':
+          if (tab) {
+            gBrowser.setTabPinned(tab, pinned);
+          }
+          break;
+        case 'openExtensions':
+          if (window.openExtensionsPanel) {
+            openExtensionsPanel();
+          }
+          break;
+        case 'openSettings':
           openPreferences();
           break;
       }
@@ -84,10 +105,12 @@
             active: browser.selected
           });
         }
-        const iframe = document.getElementById('aura-ui-frame');
-        if (iframe && iframe.contentWindow && iframe.contentWindow.auraTabs) {
-          iframe.contentWindow.auraTabs.setTabs(tabs);
+        
+        if (window.auraBubbleTabs) {
+          window.auraBubbleTabs.setTabs(tabs);
         }
+        
+        window.dispatchEvent(new CustomEvent('aura-sync-tabs', { detail: { tabs } }));
       } catch (e) {
         console.error('[Aura] Sync tabs error:', e);
       }
