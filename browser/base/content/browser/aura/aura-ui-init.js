@@ -17,6 +17,11 @@
       console.error('[AuraUI] No root element found');
       return false;
     }
+    
+    if (document.getElementById('aura-trigger')) {
+      console.log('[AuraUI] Elements already exist');
+      return false;
+    }
 
     // Ambient bubbles container
     const ambientContainer = document.createElement('div');
