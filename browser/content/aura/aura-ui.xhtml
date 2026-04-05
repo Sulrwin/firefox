@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8"/>
+  <link rel="stylesheet" href="chrome://browser/content/aura/bubble-tabs.css"/>
+  <title>Protocal Aura</title>
+</head>
+<body>
+  <div id="aura-root">
+    <div class="ambient-bubbles" id="ambient-bubbles"></div>
+    
+    <button class="aura-back" id="aura-back" aria-label="Go back">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M15 18l-6-6 6-6"/>
+      </svg>
+    </button>
+
+    <button class="aura-forward" id="aura-forward" aria-label="Go forward">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 18l6-6-6-6"/>
+      </svg>
+    </button>
+
+    <div class="aura-url-bar" id="aura-url-bar">
+      <button class="aura-refresh" id="aura-refresh" aria-label="Refresh">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M23 4v6h-6M1 20v-6h6"/>
+          <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+        </svg>
+      </button>
+      <input type="text" class="aura-url-input" id="aura-url-input" placeholder="Enter URL..."/>
+      <button class="aura-extensions" id="aura-extensions" aria-label="Extensions">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+        </svg>
+      </button>
+    </div>
+
+    <button class="aura-trigger" id="aura-trigger" aria-label="Open tabs">
+      <span class="aura-trigger-icon">+</span>
+    </button>
+
+    <div class="aura-bubble-container" id="aura-bubbles">
+      <div class="aura-pinned-group" id="aura-pinned"></div>
+      <div class="aura-separator"></div>
+      <div class="aura-tab-group" id="aura-tabs"></div>
+      <button class="aura-bubble aura-bubble-add" id="aura-add-tab" aria-label="New tab"></button>
+    </div>
+
+    <div class="aura-new-tab-bar" id="aura-new-tab-bar">
+      <input type="text" class="aura-new-tab-input" id="aura-new-tab-input" placeholder="Search or enter URL..."/>
+    </div>
+
+    <button class="aura-settings" id="aura-settings" aria-label="Settings">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
+      </svg>
+    </button>
+  </div>
+  
+  <script src="chrome://browser/content/aura/bubble-tabs-ui.js"/>
+</body>
+</html>

@@ -757,3 +757,15 @@ body.dragging-tabs {
   color: rgba(255, 255, 255, 0.4);
   margin-top: 8px;
 }
+
+/* Expanded State */
+#aura-bubbles.expanded {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  transform: translateX(-50%) scale(1);
+}
+
+.aura-trigger.active {
+  opacity: 1 !important;
+  transform: translateX(-50%) rotate(45deg) scale(1.1);
+}
