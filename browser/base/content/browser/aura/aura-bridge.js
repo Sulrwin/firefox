@@ -3,8 +3,6 @@
 (function() {
   const AURA_ENABLED = true;
 
-  console.log('[Aura] aura-bridge.js loaded');
-
   if (!AURA_ENABLED) return;
 
   window.addEventListener('load', initAuraBridge, { once: true });
@@ -13,22 +11,15 @@
     if (window.auraBridgeInitialized) return;
     window.auraBridgeInitialized = true;
 
-    console.log('[Aura] Bridge init');
-
-    if (!window.gBrowser) {
-      console.error('[Aura] No gBrowser');
-      return;
-    }
+    if (!window.gBrowser) return;
 
     window.addEventListener('message', function(e) {
       if (e.data && e.data.type === 'aura-action') {
-        console.log('[Aura] Message action:', e.data.action);
         handleAuraAction(e.data);
       }
     });
 
     function handleAuraAction(data) {
-      console.log('[Aura] Action:', data.action, data.url || '');
       const action = data.action;
       const url = data.url;
       const tabId = data.tabId;
@@ -48,7 +39,6 @@
           }
           break;
         case 'newTab':
-          console.log('[Aura] Opening new tab:', url);
           gBrowser.selectedTab = gBrowser.addTrustedTab(url || 'about:newtab');
           break;
         case 'navigate':
@@ -73,8 +63,8 @@
           }
           break;
         case 'pinTab':
-          if (tab) {
-            gBrowser.setTabPinned(tab, pinned);
+          if (tab && tab.togglePinned) {
+            tab.togglePinned();
           }
           break;
         case 'openExtensions':
@@ -116,14 +106,21 @@
       }
     }
 
-    gBrowser.addEventListener('TabOpen', syncTabs);
-    gBrowser.addEventListener('TabClose', syncTabs);
-    gBrowser.addEventListener('TabSelect', syncTabs);
-    gBrowser.addEventListener('TabPinned', syncTabs);
-    gBrowser.addEventListener('TabUnpinned', syncTabs);
+    // Use polling for tab sync since events may not fire reliably
+    let lastTabCount = gBrowser.tabs.length;
+    setInterval(() => {
+      if (gBrowser.tabs.length !== lastTabCount || gBrowser.selectedTab !== window._lastSelectedTab) {
+        lastTabCount = gBrowser.tabs.length;
+        window._lastSelectedTab = gBrowser.selectedTab;
+        syncTabs('poll');
+      }
+    }, 500);
+
+    // Also try events as backup
+    gBrowser.addEventListener('TabOpen', () => syncTabs('TabOpen'));
+    gBrowser.addEventListener('TabClose', () => syncTabs('TabClose'));
+    gBrowser.addEventListener('TabSelect', () => syncTabs('TabSelect'));
 
     setTimeout(syncTabs, 500);
-
-    console.log('[Aura] Ready');
   }
 })();

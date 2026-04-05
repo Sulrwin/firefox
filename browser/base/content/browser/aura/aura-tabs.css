@@ -14,7 +14,18 @@
   pointer-events: none;
   z-index: 2147483646;
   font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-  background: linear-gradient(135deg, rgba(13, 13, 26, 0.3) 0%, rgba(26, 26, 46, 0.3) 50%, rgba(15, 15, 26, 0.3) 100%);
+}
+
+.ambient-bubbles {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+  background: transparent !important;
 }
 
 body.dragging-tabs {
@@ -466,28 +477,4 @@ body.dragging-tabs {
 .aura-settings:hover {
   background: rgba(255, 255, 255, 0.2);
   opacity: 1;
-}
-
-/* === Ambient Bubbles === */
-.ambient-bubbles {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 0;
-  overflow: hidden;
-}
-
-.ambient-bubble {
-  position: absolute;
-  border-radius: 50%;
-  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.15), transparent);
-  animation: float 20s infinite ease-in-out;
-}
-
-@keyframes float {
-  0%, 100% { transform: translateY(0) rotate(0deg); }
-  50% { transform: translateY(-30px) rotate(180deg); }
 }

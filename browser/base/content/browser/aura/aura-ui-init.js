@@ -1,48 +1,15 @@
 /* Protocol Aura - UI Loader (Direct DOM) */
 
 (function() {
-  if (window.auraUIInitialized) {
-    console.log('[AuraUI] Already initialized');
-    return;
-  }
+  if (window.auraUIInitialized) return;
   window.auraUIInitialized = true;
-  
-  console.log('[AuraUI] Initializing direct DOM UI...');
   
   let auraTabs = null;
 
-  function createUIElements() {
+    function createUIElements() {
     const root = document.getElementById('aura-ui-root');
-    if (!root) {
-      console.error('[AuraUI] No root element found');
-      return false;
-    }
-    
-    if (document.getElementById('aura-trigger')) {
-      console.log('[AuraUI] Elements already exist');
-      return false;
-    }
-
-    // Ambient bubbles container
-    const ambientContainer = document.createElement('div');
-    ambientContainer.id = 'ambient-bubbles';
-    ambientContainer.className = 'ambient-bubbles';
-    root.appendChild(ambientContainer);
-
-    // Create ambient bubbles
-    for (let i = 0; i < 8; i++) {
-      const bubble = document.createElement('div');
-      bubble.className = 'ambient-bubble';
-      const size = 80 + Math.random() * 180;
-      bubble.style.width = size + 'px';
-      bubble.style.height = size + 'px';
-      bubble.style.left = Math.random() * 100 + '%';
-      bubble.style.top = Math.random() * 100 + '%';
-      bubble.style.animationDuration = (25 + Math.random() * 20) + 's';
-      bubble.style.animationDelay = (-Math.random() * 25) + 's';
-      bubble.style.opacity = 0.15 + Math.random() * 0.2;
-      ambientContainer.appendChild(bubble);
-    }
+    if (!root) return false;
+    if (document.getElementById('aura-trigger')) return false;
 
     // Back button
     const backBtn = document.createElement('button');
@@ -151,7 +118,6 @@
 
     root.appendChild(newTabBar);
 
-    console.log('[AuraUI] DOM elements created');
     return true;
   }
 
@@ -205,7 +171,6 @@
     });
 
     window.auraBubbleTabs = auraTabs;
-    console.log('[AuraUI] AuraBubbleTabs initialized');
   }
 
   function init() {
@@ -217,8 +182,6 @@
         auraTabs.setTabs(e.detail.tabs);
       }
     });
-    
-    console.log('[AuraUI] Initialization complete');
   }
 
   if (document.readyState === 'loading') {
