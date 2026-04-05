@@ -58,7 +58,7 @@
     extensionsBtn.id = 'aura-extensions';
     extensionsBtn.className = 'aura-extensions';
     extensionsBtn.setAttribute('aria-label', 'Extensions');
-    extensionsBtn.textContent = '⚙';
+    extensionsBtn.textContent = '🧩';
     urlBar.appendChild(extensionsBtn);
 
     root.appendChild(urlBar);
