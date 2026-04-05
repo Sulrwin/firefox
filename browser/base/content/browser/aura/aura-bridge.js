@@ -43,8 +43,12 @@
           break;
         case 'navigate':
           if (url && gBrowser.selectedBrowser) {
-            console.log('[Aura] Navigating to:', url);
-            gBrowser.selectedBrowser.loadURI(url);
+            const urlBar = gBrowser.selectedBrowser;
+            try {
+              urlBar.loadURI(url, { triggeringPrincipal: urlBar.contentPrincipal });
+            } catch (e) {
+              urlBar.loadURI(url);
+            }
           }
           break;
         case 'goBack':
