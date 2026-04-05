@@ -36,6 +36,7 @@ class AuraBubbleTabs {
   }
 
   createDOM() {
+    console.log('[AuraTabs] createDOM() called');
     this.elements.back = document.getElementById('aura-back');
     this.elements.forward = document.getElementById('aura-forward');
     this.elements.refresh = document.getElementById('aura-refresh');
@@ -53,8 +54,16 @@ class AuraBubbleTabs {
   }
 
   bindEvents() {
-    if (!this.elements.trigger) return;
-    this.elements.trigger.addEventListener('click', () => this.expand());
+    if (!this.elements.trigger) {
+      console.log('[AuraTabs] Trigger element not found');
+      return;
+    }
+    console.log('[AuraTabs] Binding trigger click');
+    this.elements.trigger.addEventListener('click', (e) => {
+      console.log('[AuraTabs] Trigger clicked, isExpanded:', this.isExpanded);
+      e.stopPropagation();
+      this.expand();
+    });
     
     this.elements.addButton.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -143,6 +152,7 @@ class AuraBubbleTabs {
   }
 
   expand() {
+    console.log('[AuraTabs] expand() called');
     this.isExpanded = true;
     this.elements.trigger.classList.add('hidden');
     this.elements.back?.classList.remove('near');

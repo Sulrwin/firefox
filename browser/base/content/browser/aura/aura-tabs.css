@@ -160,6 +160,11 @@ body.dragging-tabs {
   z-index: 1000;
 }
 
+.aura-url-bar.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
 .aura-url-input {
   width: 300px;
   height: 36px;
@@ -213,6 +218,11 @@ body.dragging-tabs {
   pointer-events: none;
   transition: opacity 300ms ease, transform 300ms ease;
   z-index: 2000;
+}
+
+.aura-bubble-container.visible {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .aura-pinned-group, .aura-tab-group {
