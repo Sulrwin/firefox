@@ -41,6 +41,8 @@ browser.jar:
         content/browser/browser.js                    (content/browser.js)
 *       content/browser/browser.xhtml                 (content/browser.xhtml)
         content/browser/browser-a11yUtils.js          (content/browser-a11yUtils.js)
+        content/browser/aura/bubble-tabs.js          (content/browser/aura/bubble-tabs.js)
+        content/browser/aura/bubble-tabs.css         (content/browser/aura/bubble-tabs.css)
         content/browser/browser-addons.js             (content/browser-addons.js)
         content/browser/browser-captivePortal.js      (content/browser-captivePortal.js)
         content/browser/browser-commands.js           (content/browser-commands.js)
