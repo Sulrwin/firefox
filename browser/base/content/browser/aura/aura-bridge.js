@@ -42,12 +42,18 @@
           gBrowser.selectedTab = gBrowser.addTrustedTab(url || 'about:newtab');
           break;
         case 'navigate':
-          if (url && gBrowser.selectedBrowser) {
-            const urlBar = gBrowser.selectedBrowser;
+          if (url && gBrowser.selectedTab) {
             try {
-              urlBar.loadURI(url, { triggeringPrincipal: urlBar.contentPrincipal });
+              gBrowser.loadURI(url, {
+                triggeringPrincipal: gBrowser.selectedBrowser.contentPrincipal,
+                flags: gBrowser.LOAD_FLAGS_NONE
+              });
             } catch (e) {
-              urlBar.loadURI(url);
+              try {
+                gBrowser.loadURI(url);
+              } catch (e2) {
+                gBrowser.selectedBrowser.loadURI(url);
+              }
             }
           }
           break;
@@ -87,21 +93,29 @@
     function syncTabs() {
       try {
         const tabs = [];
+        let currentUrl = '';
         for (let i = 0; i < gBrowser.tabs.length; i++) {
           const browser = gBrowser.tabs[i];
+          const url = browser.currentURI?.spec || '';
           tabs.push({
             id: 'tab-' + i,
             title: browser.label || 'New Tab',
-            url: browser.currentURI?.spec || '',
+            url: url,
             favicon: browser.image || null,
             pinned: browser.pinned || false,
             loading: browser.getAttribute('busy') === 'true',
             active: browser.selected
           });
+          if (browser.selected) {
+            currentUrl = url;
+          }
         }
         
         if (window.auraBubbleTabs) {
           window.auraBubbleTabs.setTabs(tabs);
+          if (currentUrl) {
+            window.auraBubbleTabs.updateUrlBar(currentUrl);
+          }
         }
         
         window.dispatchEvent(new CustomEvent('aura-sync-tabs', { detail: { tabs } }));

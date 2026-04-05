@@ -183,6 +183,12 @@ class AuraBubbleTabs {
     }
   }
 
+  updateUrlBar(url) {
+    if (this.elements.urlInput && url !== this.elements.urlInput.value) {
+      this.elements.urlInput.value = url;
+    }
+  }
+
   render(animate = false) {
     const pinned = this.tabs.filter(t => t.pinned);
     const active = this.tabs.filter(t => !t.pinned);
