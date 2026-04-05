@@ -95,18 +95,24 @@
         const tabs = [];
         let currentUrl = '';
         for (let i = 0; i < gBrowser.tabs.length; i++) {
-          const browser = gBrowser.tabs[i];
-          const url = browser.currentURI?.spec || '';
+          const tab = gBrowser.tabs[i];
+          let url = '';
+          let title = tab.label || 'New Tab';
+          
+          if (tab.linkedBrowser) {
+            url = tab.linkedBrowser.currentURI?.spec || '';
+          }
+          
           tabs.push({
             id: 'tab-' + i,
-            title: browser.label || 'New Tab',
+            title: title,
             url: url,
-            favicon: browser.image || null,
-            pinned: browser.pinned || false,
-            loading: browser.getAttribute('busy') === 'true',
-            active: browser.selected
+            favicon: tab.image || null,
+            pinned: tab.pinned || false,
+            loading: tab.getAttribute('busy') === 'true',
+            active: tab.selected
           });
-          if (browser.selected) {
+          if (tab.selected) {
             currentUrl = url;
           }
         }
