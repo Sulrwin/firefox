@@ -103,9 +103,8 @@
 
   <script src="chrome://browser/content/global-scripts.js"></script>
   <script src="chrome://browser/content/browser-main.js"></script>
-  <link rel="stylesheet" href="chrome://browser/content/aura/bubble-tabs.css"/>
-  <script src="chrome://browser/content/aura/bubble-tabs-ui.js"/>
   <script src="chrome://browser/content/aura/aura-bridge.js"/>
+  <script src="chrome://browser/content/aura/aura-ui-init.js"/>
   
   <html:style>
     #navigator-toolbox, #TabsToolbar, #titlebar, #browser-bottombox, #page-titlebar,
@@ -115,7 +114,7 @@
   </html:style>
 </head>
 <html:body xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul">
-  <html:div id="aura-ui-root" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 2147483647; pointer-events: none;"></html:div>
+  <html:div id="aura-ui-root" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 2147483647; pointer-events: auto;"></html:div>
 
 # All sets except for popupsets (commands, keys, and stringbundles)
 # *must* go into the browser-sets.inc file so that they can be shared with other

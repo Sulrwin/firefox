@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Protocal Aura - Living Bubbles</title>
+  <link rel="stylesheet" href="bubble-tabs.css">
+</head>
+<body>
+  <div class="ambient-bubbles" id="bg-bubbles"></div>
+
+  <div class="demo-content">
+    <h1>PROTOCAL AURA</h1>
+    <p>Tap the orb to reveal tabs</p>
+  </div>
+
+  <div id="aura-ui-root"></div>
+
+  <script src="bubble-tabs.js"></script>
+  <script>
+    // Background ambient bubbles
+    for (let i = 0; i < 10; i++) {
+      const bg = document.getElementById('bg-bubbles');
+      const b = document.createElement('div');
+      b.className = 'ambient-bubble';
+      const size = 100 + Math.random() * 200;
+      b.style.cssText = `
+        width: ${size}px; 
+        height: ${size}px;
+        left: ${Math.random() * 100}%;
+        top: ${Math.random() * 100}%;
+        animation-duration: ${25 + Math.random() * 25}s;
+        animation-delay: ${-Math.random() * 25}s;
+        opacity: ${0.1 + Math.random() * 0.15};
+      `;
+      bg.appendChild(b);
+    }
+
+    const demo = new AuraBubbleTabs({
+      onTabSelect: (id) => {
+        demo.setActive(id);
+      },
+      onTabClose: (id) => {},
+      onNewTab: (url) => {
+        demo.addNewTab(url);
+      }
+    });
+
+    demo.setTabs([
+      { id: 'tab-1', title: 'GitHub', favicon: null, pinned: false, loading: false, active: true },
+      { id: 'tab-2', title: 'Twitter', favicon: null, pinned: false, loading: false, active: false },
+      { id: 'tab-3', title: 'Reddit', favicon: null, pinned: false, loading: false, active: false },
+      { id: 'pin-1', title: 'Gmail', favicon: null, pinned: true, loading: false, active: false },
+      { id: 'pin-2', title: 'Drive', favicon: null, pinned: true, loading: false, active: false },
+    ]);
+
+    demo.setActive = (id) => {
+      demo.tabs = demo.tabs.map(t => ({...t, active: t.id === id}));
+      demo.render();
+    };
+
+    let tabCounter = 4;
+    const sites = ['YouTube', 'Discord', 'Spotify', 'Netflix', 'Slack', 'Notion', 'Figma', 'Stripe'];
+    
+    demo.addNewTab = (url) => {
+      const title = url || sites[Math.floor(Math.random() * sites.length)];
+      demo.tabs.push({
+        id: `tab-${tabCounter++}`,
+        title,
+        url: url || title,
+        favicon: null,
+        pinned: false,
+        loading: false,
+        active: true
+      });
+      demo.setActive(`tab-${tabCounter - 1}`);
+    };
+  </script>
+</body>
+</html>

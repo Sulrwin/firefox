@@ -1,4 +1,4 @@
-/* Protocal Aura - Browser Integration Bridge */
+/* Protocol Aura - Browser Integration Bridge */
 
 (function() {
   const AURA_ENABLED = true;
@@ -20,29 +20,43 @@
       return;
     }
 
+    window.addEventListener('message', function(e) {
+      if (e.data && e.data.type === 'aura-action') {
+        console.log('[Aura] Message action:', e.data.action);
+        handleAuraAction(e.data);
+      }
+    });
+
     function handleAuraAction(data) {
-      console.log('[Aura] Action:', data.type, data.url || '');
-      const { type, url } = data;
-      const tabId = data.tabId || data.id;
+      console.log('[Aura] Action:', data.action, data.url || '');
+      const action = data.action;
+      const url = data.url;
+      const tabId = data.tabId;
       const index = tabId ? parseInt(tabId.replace('tab-', '')) : -1;
       const tab = index >= 0 ? gBrowser.tabs[index] : null;
 
-      switch (type) {
+      switch (action) {
         case 'selectTab':
-          if (tab) gBrowser.selectTabAtIndex(index);
+          if (tab) gBrowser.selectedTab = tab;
           break;
         case 'closeTab':
           if (tab) gBrowser.removeTab(tab);
           break;
         case 'newTab':
           console.log('[Aura] Opening:', url);
-          gBrowser.selectedTab = gBrowser.addTab(url || 'about:newtab');
+          openTrustedLinkIn(url || 'about:newtab', 'tab');
+          break;
+        case 'navigate':
+          if (url) {
+            console.log('[Aura] Navigating to:', url);
+            openTrustedLinkIn(url, 'current');
+          }
           break;
         case 'back':
-          if (window.history.length > 1) window.history.back();
+          gBrowser.goBack();
           break;
         case 'forward':
-          window.history.forward();
+          gBrowser.goForward();
           break;
         case 'refresh':
           BrowserReload();
@@ -56,21 +70,26 @@
     window.handleAuraAction = handleAuraAction;
 
     function syncTabs() {
-      const tabs = [];
-      for (let i = 0; i < gBrowser.tabs.length; i++) {
-        const browser = gBrowser.tabs[i];
-        tabs.push({
-          id: 'tab-' + i,
-          title: browser.label || 'New Tab',
-          url: browser.currentURI?.spec || '',
-          favicon: browser.image || null,
-          pinned: browser.pinned || false,
-          loading: browser.getAttribute('busy') === 'true',
-          active: browser.selected
-        });
-      }
-      if (window.updateTabs) {
-        window.updateTabs(tabs);
+      try {
+        const tabs = [];
+        for (let i = 0; i < gBrowser.tabs.length; i++) {
+          const browser = gBrowser.tabs[i];
+          tabs.push({
+            id: 'tab-' + i,
+            title: browser.label || 'New Tab',
+            url: browser.currentURI?.spec || '',
+            favicon: browser.image || null,
+            pinned: browser.pinned || false,
+            loading: browser.getAttribute('busy') === 'true',
+            active: browser.selected
+          });
+        }
+        const iframe = document.getElementById('aura-ui-frame');
+        if (iframe && iframe.contentWindow && iframe.contentWindow.auraTabs) {
+          iframe.contentWindow.auraTabs.setTabs(tabs);
+        }
+      } catch (e) {
+        console.error('[Aura] Sync tabs error:', e);
       }
     }
 
@@ -80,7 +99,7 @@
     gBrowser.addEventListener('TabPinned', syncTabs);
     gBrowser.addEventListener('TabUnpinned', syncTabs);
 
-    setTimeout(syncTabs, 100);
+    setTimeout(syncTabs, 500);
 
     console.log('[Aura] Ready');
   }

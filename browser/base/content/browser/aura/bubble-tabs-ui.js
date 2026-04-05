@@ -221,4 +221,10 @@
   window.updateTabs = (tabs) => {
     if (window.auraUI) window.auraUI.setTabs(tabs);
   };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => window.auraUI.init());
+  } else {
+    window.auraUI.init();
+  }
 })();

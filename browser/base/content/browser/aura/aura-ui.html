@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Protocol Aura</title>
+  <link rel="stylesheet" href="chrome://browser/content/aura/aura-tabs.css">
+</head>
+<body>
+  <div class="ambient-bubbles" id="bg-bubbles"></div>
+
+  <div class="demo-content">
+    <h1>PROTOCOL AURA</h1>
+    <p>Tap the orb to reveal tabs</p>
+  </div>
+
+  <div id="aura-ui-root"></div>
+
+  <script src="chrome://browser/content/aura/aura-tabs.js"></script>
+  <script>
+    for (let i = 0; i < 10; i++) {
+      const bg = document.getElementById('bg-bubbles');
+      const b = document.createElement('div');
+      b.className = 'ambient-bubble';
+      const size = 100 + Math.random() * 200;
+      b.style.cssText = `
+        width: ${size}px; 
+        height: ${size}px;
+        left: ${Math.random() * 100}%;
+        top: ${Math.random() * 100}%;
+        animation-duration: ${25 + Math.random() * 25}s;
+        animation-delay: ${-Math.random() * 25}s;
+        opacity: ${0.1 + Math.random() * 0.15};
+      `;
+      bg.appendChild(b);
+    }
+
+    const auraTabs = new AuraBubbleTabs({
+      onTabSelect: (id) => {
+        auraTabs.setActive(id);
+        parent.postMessage({ type: 'aura-action', action: 'selectTab', tabId: id }, '*');
+      },
+      onTabClose: (id) => {
+        parent.postMessage({ type: 'aura-action', action: 'closeTab', tabId: id }, '*');
+      },
+      onNewTab: (url) => {
+        parent.postMessage({ type: 'aura-action', action: 'newTab', url }, '*');
+      }
+    });
+
+    auraTabs.setActive = (id) => {
+      auraTabs.tabs = auraTabs.tabs.map(t => ({...t, active: t.id === id}));
+      auraTabs.render();
+    };
+
+    auraTabs.setTabs([
+      { id: 'tab-1', title: 'Home', favicon: null, pinned: false, loading: false, active: true }
+    ]);
+  </script>
+</body>
+</html>

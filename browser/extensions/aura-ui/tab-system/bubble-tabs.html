@@ -1,0 +1,51 @@
+<!-- Bubble Tab UI - HTML Template -->
+
+<div id="aura-ui-root">
+  <!-- Collapsed State: Oval Trigger -->
+  <button class="aura-trigger" id="aura-trigger" aria-label="Open tabs">
+    <span class="aura-trigger-icon">+</span>
+  </button>
+
+  <!-- Expanded State: Bubble Container -->
+  <div class="aura-bubble-container" id="aura-bubbles">
+    
+    <!-- Pinned Tabs Group -->
+    <div class="aura-pinned-group" id="aura-pinned">
+      <!-- Pinned bubbles rendered here -->
+    </div>
+
+    <!-- Active Tabs Group -->
+    <div class="aura-tab-group" id="aura-tabs">
+      <!-- Tab bubbles rendered here -->
+    </div>
+
+    <!-- Add New Tab Bubble -->
+    <button class="aura-bubble aura-bubble-add" id="aura-add-tab" aria-label="New tab"></button>
+  </div>
+</div>
+
+<!-- Example Rendered State:
+<div class="aura-bubble pinned animate-in" data-tab-id="pinned-1">
+  <span class="aura-bubble-icon">G</span>
+  <span class="aura-bubble-lock">🔒</span>
+</div>
+
+<div class="aura-bubble pinned animate-in" data-tab-id="pinned-2">
+  <span class="aura-bubble-icon">YT</span>
+</div>
+
+<div class="aura-bubble active animate-in" data-tab-id="tab-1">
+  <span class="aura-bubble-icon">
+    <img src="favicon.png" alt="">
+  </span>
+  <div class="aura-bubble-progress">
+    <span></span><span></span><span></span>
+  </div>
+  <button class="aura-bubble-close" aria-label="Close tab">×</button>
+</div>
+
+<div class="aura-bubble animate-in" data-tab-id="tab-2">
+  <span class="aura-bubble-icon">H</span>
+  <button class="aura-bubble-close" aria-label="Close tab">×</button>
+</div>
+-->
