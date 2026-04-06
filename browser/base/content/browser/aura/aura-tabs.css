@@ -489,3 +489,29 @@ body.dragging-tabs {
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
 }
+
+/* === Standalone Settings Button === */
+.aura-settings-standalone {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(30, 30, 30, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  z-index: 1001;
+  transition: background 200ms ease, opacity 200ms ease;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.aura-settings-standalone:hover {
+  background: rgba(30, 30, 30, 0.9);
+}
