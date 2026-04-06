@@ -82,13 +82,34 @@
     const extensionsPopup = document.createElement('div');
     extensionsPopup.id = 'aura-extensions-popup';
     extensionsPopup.className = 'aura-extensions-popup';
-    extensionsPopup.innerHTML = `
-      <div class="aura-extensions-header">
-        <span class="aura-extensions-title">Extensions</span>
-        <button class="aura-extensions-close" aria-label="Close">×</button>
-      </div>
-      <div class="aura-extensions-list" id="aura-extensions-list"></div>
-    `;
+    
+    const extensionsHeader = document.createElement('div');
+    extensionsHeader.className = 'aura-extensions-header';
+    
+    const extensionsTitle = document.createElement('span');
+    extensionsTitle.className = 'aura-extensions-title';
+    extensionsTitle.textContent = 'Extensions';
+    extensionsHeader.appendChild(extensionsTitle);
+    
+    const builtInBtn = document.createElement('button');
+    builtInBtn.id = 'aura-extensions-builtin';
+    builtInBtn.className = 'aura-extensions-builtin';
+    builtInBtn.setAttribute('aria-label', 'Toggle built-in extensions');
+    builtInBtn.textContent = 'Built In';
+    extensionsHeader.appendChild(builtInBtn);
+    
+    const extensionsClose = document.createElement('button');
+    extensionsClose.className = 'aura-extensions-close';
+    extensionsClose.setAttribute('aria-label', 'Close');
+    extensionsClose.textContent = '×';
+    extensionsHeader.appendChild(extensionsClose);
+    
+    const extensionsList = document.createElement('div');
+    extensionsList.id = 'aura-extensions-list';
+    extensionsList.className = 'aura-extensions-list';
+    
+    extensionsPopup.appendChild(extensionsHeader);
+    extensionsPopup.appendChild(extensionsList);
     root.appendChild(extensionsPopup);
 
     // Bubble container
@@ -221,7 +242,9 @@
     const extensionsBtn = document.getElementById('aura-extensions');
     const extensionsPopup = document.getElementById('aura-extensions-popup');
     const extensionsClose = extensionsPopup?.querySelector('.aura-extensions-close');
+    const builtInBtn = document.getElementById('aura-extensions-builtin');
     const extensionsList = document.getElementById('aura-extensions-list');
+    let showBuiltin = false;
     
     if (extensionsBtn && extensionsPopup) {
       extensionsBtn.addEventListener('click', (e) => {
@@ -231,6 +254,15 @@
         if (!isVisible) {
           loadExtensions();
         }
+      });
+    }
+    
+    if (builtInBtn) {
+      builtInBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showBuiltin = !showBuiltin;
+        builtInBtn.classList.toggle('active', showBuiltin);
+        loadExtensions();
       });
     }
     
@@ -256,12 +288,17 @@
           AddonManager.getAddonsByTypes(['extension']).then(addons => {
             extensionsList.innerHTML = '';
             
-            if (addons.length === 0) {
-              extensionsList.innerHTML = '<div class="aura-extensions-empty">No extensions installed</div>';
+            const filteredAddons = showBuiltin ? addons : addons.filter(addon => {
+              return !addon.isBuiltin && addon.type !== 'theme' && !addon.sYSTEMADDON;
+            });
+            
+            if (filteredAddons.length === 0) {
+              const msg = showBuiltin ? 'No extensions found' : 'No user extensions installed';
+              extensionsList.innerHTML = '<div class="aura-extensions-empty">' + msg + '</div>';
               return;
             }
             
-            addons.forEach(addon => {
+            filteredAddons.forEach(addon => {
               try {
                 const item = document.createElement('div');
                 item.className = 'aura-extension-item';
@@ -281,7 +318,6 @@
                   iconEl.textContent = name.charAt(0).toUpperCase();
                 }
                 
-                const isBuiltin = addon.isBuiltin || addon.type === 'theme' || addon.sYSTEMADDON;
                 const description = addon.description ? String(addon.description) : (addon.version || 'Enabled');
                 
                 const infoEl = document.createElement('div');
@@ -290,12 +326,6 @@
                 const nameEl = document.createElement('div');
                 nameEl.className = 'aura-extension-name';
                 nameEl.textContent = name;
-                if (isBuiltin) {
-                  const badge = document.createElement('span');
-                  badge.className = 'aura-extension-builtin';
-                  badge.textContent = 'Built-in';
-                  nameEl.appendChild(badge);
-                }
                 
                 const descEl = document.createElement('div');
                 descEl.className = 'aura-extension-desc';
@@ -307,20 +337,18 @@
                 item.appendChild(iconEl);
                 item.appendChild(infoEl);
                 
-                if (!isBuiltin) {
-                  const toggle = document.createElement('button');
-                  toggle.className = 'aura-extension-toggle' + (addon.isActive ? ' enabled' : '');
-                  toggle.setAttribute('aria-label', 'Toggle extension');
-                  toggle.dataset.id = addon.id;
-                  item.appendChild(toggle);
-                  
-                  const remove = document.createElement('button');
-                  remove.className = 'aura-extension-remove';
-                  remove.setAttribute('aria-label', 'Remove extension');
-                  remove.dataset.id = addon.id;
-                  remove.textContent = '×';
-                  item.appendChild(remove);
-                }
+                const toggle = document.createElement('button');
+                toggle.className = 'aura-extension-toggle' + (addon.isActive ? ' enabled' : '');
+                toggle.setAttribute('aria-label', 'Toggle extension');
+                toggle.dataset.id = addon.id;
+                item.appendChild(toggle);
+                
+                const remove = document.createElement('button');
+                remove.className = 'aura-extension-remove';
+                remove.setAttribute('aria-label', 'Remove extension');
+                remove.dataset.id = addon.id;
+                remove.textContent = '×';
+                item.appendChild(remove);
                 
                 extensionsList.appendChild(item);
               } catch (err) {

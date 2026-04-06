@@ -515,6 +515,29 @@ body.dragging-tabs {
   background: rgba(255, 255, 255, 0.2);
 }
 
+.aura-extensions-builtin {
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  transition: background 200ms ease, color 200ms ease;
+}
+
+.aura-extensions-builtin:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.aura-extensions-builtin.active {
+  background: rgba(100, 150, 255, 0.3);
+  color: rgba(150, 200, 255, 0.9);
+  border-color: rgba(100, 150, 255, 0.4);
+}
+
 .aura-extensions-list {
   flex: 1;
   overflow-y: auto;
