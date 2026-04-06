@@ -58,6 +58,34 @@ class AuraBubbleTabs {
       e.stopPropagation();
       this.expand();
     });
+
+    if (this.elements.refresh) {
+      this.elements.refresh.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (this.onRefresh) this.onRefresh();
+      });
+    }
+
+    if (this.elements.extensions) {
+      this.elements.extensions.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (this.onExtensions) this.onExtensions();
+      });
+    }
+
+    if (this.elements.back) {
+      this.elements.back.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (this.onBack) this.onBack();
+      });
+    }
+
+    if (this.elements.forward) {
+      this.elements.forward.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (this.onForward) this.onForward();
+      });
+    }
     
     this.elements.addButton.addEventListener('click', (e) => {
       e.stopPropagation();

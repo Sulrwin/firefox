@@ -128,20 +128,23 @@
       }
     }
 
-    // Use polling for tab sync since events may not fire reliably
+    // Use polling for tab sync
     let lastTabCount = gBrowser.tabs.length;
+    let lastSelectedIndex = -1;
     setInterval(() => {
-      if (gBrowser.tabs.length !== lastTabCount || gBrowser.selectedTab !== window._lastSelectedTab) {
+      const currentIndex = gBrowser.tabContainer.selectedIndex;
+      if (gBrowser.tabs.length !== lastTabCount || currentIndex !== lastSelectedIndex) {
         lastTabCount = gBrowser.tabs.length;
-        window._lastSelectedTab = gBrowser.selectedTab;
-        syncTabs('poll');
+        lastSelectedIndex = currentIndex;
+        syncTabs();
       }
     }, 500);
 
-    // Also try events as backup
-    gBrowser.addEventListener('TabOpen', () => syncTabs('TabOpen'));
-    gBrowser.addEventListener('TabClose', () => syncTabs('TabClose'));
-    gBrowser.addEventListener('TabSelect', () => syncTabs('TabSelect'));
+    // Also listen to browser events
+    gBrowser.addEventListener('TabOpen', () => syncTabs());
+    gBrowser.addEventListener('TabClose', () => syncTabs());
+    gBrowser.addEventListener('TabSelect', () => syncTabs());
+    gBrowser.addEventListener('load', (e) => syncTabs());
 
     setTimeout(syncTabs, 500);
   }
