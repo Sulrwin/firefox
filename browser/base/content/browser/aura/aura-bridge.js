@@ -100,6 +100,7 @@
             if (tab) {
               const pinned = data.pinned;
               const tabIndex = index;
+              console.log('[Aura] pinTab called:', { tabIndex, pinned, tabId: data.tabId });
               if (pinned) {
                 if (gBrowser.pinTab) {
                   gBrowser.pinTab(tab);
@@ -107,6 +108,7 @@
                   tab.pinned = true;
                 }
                 const currentUrl = tab.linkedBrowser?.currentURI?.spec || '';
+                console.log('[Aura] Storing pinned URL:', currentUrl, 'at index:', tabIndex);
                 if (currentUrl && currentUrl !== 'about:blank') {
                   pinnedUrls.set(tabIndex, currentUrl);
                 }
@@ -208,6 +210,10 @@
           const isPinned = tab.pinned || false;
           const pinnedUrl = pinnedUrls.get(i) || null;
           const urlChanged = isPinned && pinnedUrl && url !== pinnedUrl && url !== 'about:blank';
+          
+          if (isPinned && pinnedUrl) {
+            console.log('[Aura] Pinned tab sync:', { i, url, pinnedUrl, urlChanged });
+          }
           
           tabs.push({
             id: tabId,
