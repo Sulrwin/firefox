@@ -128,23 +128,33 @@
       }
     }
 
-    // Use polling for tab sync
+    // Use polling for tab sync - more frequent
     let lastTabCount = gBrowser.tabs.length;
     let lastSelectedIndex = -1;
+    let lastSelectedUrl = '';
     setInterval(() => {
       const currentIndex = gBrowser.tabContainer.selectedIndex;
-      if (gBrowser.tabs.length !== lastTabCount || currentIndex !== lastSelectedIndex) {
+      const currentTab = gBrowser.selectedTab;
+      const currentUrl = currentTab?.linkedBrowser?.currentURI?.spec || '';
+      
+      if (gBrowser.tabs.length !== lastTabCount || 
+          currentIndex !== lastSelectedIndex || 
+          currentUrl !== lastSelectedUrl) {
         lastTabCount = gBrowser.tabs.length;
         lastSelectedIndex = currentIndex;
+        lastSelectedUrl = currentUrl;
         syncTabs();
       }
-    }, 500);
+    }, 200);
 
     // Also listen to browser events
     gBrowser.addEventListener('TabOpen', () => syncTabs());
     gBrowser.addEventListener('TabClose', () => syncTabs());
     gBrowser.addEventListener('TabSelect', () => syncTabs());
-    gBrowser.addEventListener('load', (e) => syncTabs());
+    
+    // Listen for page load events on the selected browser
+    gBrowser.selectedBrowser.addEventListener('load', () => syncTabs(), true);
+    gBrowser.selectedBrowser.addEventListener('DOMContentLoaded', () => syncTabs(), true);
 
     setTimeout(syncTabs, 500);
   }
