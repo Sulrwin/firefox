@@ -32,7 +32,7 @@ body.dragging-tabs {
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(30, 30, 30, 0.7);
   border: 1px solid rgba(255, 255, 255, 0.2);
   color: rgba(255, 255, 255, 0.9);
   cursor: pointer;
@@ -44,16 +44,18 @@ body.dragging-tabs {
   pointer-events: none;
   z-index: 1000;
   transition: opacity 300ms ease, transform 200ms ease, background 200ms ease;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .aura-back:hover {
   opacity: 0.9 !important;
   transform: translateY(-50%) scale(1.1);
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(30, 30, 30, 0.85);
 }
 
 .aura-back.near {
-  opacity: 0.6;
+  opacity: 0.7;
   pointer-events: auto;
 }
 
@@ -66,7 +68,7 @@ body.dragging-tabs {
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(30, 30, 30, 0.7);
   border: 1px solid rgba(255, 255, 255, 0.2);
   color: rgba(255, 255, 255, 0.9);
   cursor: pointer;
@@ -78,16 +80,18 @@ body.dragging-tabs {
   pointer-events: none;
   z-index: 1000;
   transition: opacity 300ms ease, transform 200ms ease, background 200ms ease;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .aura-forward:hover {
   opacity: 0.9 !important;
   transform: translateY(-50%) scale(1.1);
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(30, 30, 30, 0.85);
 }
 
 .aura-forward.near {
-  opacity: 0.6;
+  opacity: 0.7;
   pointer-events: auto;
 }
 
@@ -104,20 +108,21 @@ body.dragging-tabs {
   width: 80px;
   height: 20px;
   border-radius: 0 0 12px 12px;
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(30, 30, 30, 0.7);
   border: none;
-  border-top: 1px solid rgba(255, 255, 255, 0.3);
   cursor: pointer;
   transition: opacity 300ms ease, height 200ms ease, width 200ms ease, background 200ms ease;
   z-index: 2000;
   opacity: 0;
   pointer-events: none;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .aura-trigger:hover {
   opacity: 0.8 !important;
   pointer-events: auto;
-  background: rgba(255, 255, 255, 0.35);
+  background: rgba(30, 30, 30, 0.85);
 }
 
 .aura-trigger.near {
@@ -125,7 +130,7 @@ body.dragging-tabs {
   height: 24px;
   width: 100px;
   pointer-events: auto;
-  background: rgba(255, 255, 255, 0.35);
+  background: rgba(30, 30, 30, 0.85);
 }
 
 .aura-trigger-icon {
@@ -147,13 +152,15 @@ body.dragging-tabs {
   align-items: center;
   gap: 12px;
   padding: 8px 16px;
-  background: transparent;
+  background: rgba(30, 30, 30, 0.7);
   border-radius: 24px;
-  border: none;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   opacity: 0;
   pointer-events: none;
   transition: opacity 300ms ease, transform 300ms ease;
   z-index: 1000;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .aura-url-bar.visible {
@@ -165,7 +172,7 @@ body.dragging-tabs {
   width: 300px;
   height: 36px;
   padding: 0 16px;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.15);
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 18px;
   color: white;
@@ -176,14 +183,14 @@ body.dragging-tabs {
 
 .aura-url-input:focus {
   border-color: rgba(255, 255, 255, 0.4);
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .aura-refresh, .aura-extensions {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.15);
   border: none;
   color: rgba(255, 255, 255, 0.9);
   cursor: pointer;
@@ -195,7 +202,7 @@ body.dragging-tabs {
 }
 
 .aura-refresh:hover, .aura-extensions:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.25);
 }
 
 /* === Bubble Container === */
@@ -208,13 +215,15 @@ body.dragging-tabs {
   align-items: center;
   gap: 12px;
   padding: 16px 24px;
-  background: transparent;
+  background: rgba(30, 30, 30, 0.7);
   border-radius: 40px;
-  border: none;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   opacity: 0;
   pointer-events: none;
   transition: opacity 300ms ease, transform 300ms ease;
   z-index: 2000;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .aura-bubble-container.visible {
@@ -251,11 +260,13 @@ body.dragging-tabs {
   animation: bubbleAppear 500ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
   opacity: 0;
   transform: scale(0);
-  background: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3), inset 0 0 20px rgba(255, 255, 255, 0.1);
+  background: rgba(30, 30, 30, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), inset 0 0 20px rgba(255, 255, 255, 0.05);
   pointer-events: auto;
   flex-shrink: 0;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 @keyframes bubbleAppear {
@@ -283,14 +294,14 @@ body.dragging-tabs {
 
 .aura-bubble:hover {
   transform: scale(1.15) translateY(-3px);
-  background: rgba(255, 255, 255, 0.25);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), inset 0 0 30px rgba(255, 255, 255, 0.15);
+  background: rgba(30, 30, 30, 0.85);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), inset 0 0 30px rgba(255, 255, 255, 0.1);
 }
 
 .aura-bubble.active {
   transform: scale(1.2) translateY(-5px);
-  background: rgba(255, 255, 255, 0.3);
-  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.5), inset 0 0 40px rgba(255, 255, 255, 0.2), 0 0 20px rgba(255, 255, 255, 0.1);
+  background: rgba(50, 50, 50, 0.9);
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.6), inset 0 0 40px rgba(255, 255, 255, 0.1), 0 0 20px rgba(255, 255, 255, 0.1);
 }
 
 .aura-bubble-icon {
@@ -330,14 +341,14 @@ body.dragging-tabs {
 }
 
 .aura-bubble-add {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(30, 30, 30, 0.5);
   border: 2px dashed rgba(255, 255, 255, 0.3);
   font-size: 20px;
   color: rgba(255, 255, 255, 0.5);
 }
 
 .aura-bubble-add:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(30, 30, 30, 0.7);
   border-color: rgba(255, 255, 255, 0.5);
 }
 
@@ -366,13 +377,14 @@ body.dragging-tabs {
   width: 400px;
   height: 48px;
   padding: 0 24px;
-  background: rgba(20, 20, 40, 0.95);
+  background: rgba(30, 30, 30, 0.85);
   border: 2px solid rgba(255, 255, 255, 0.2);
   border-radius: 24px;
   color: white;
   font-size: 16px;
   outline: none;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .aura-new-tab-input:focus {
@@ -442,7 +454,7 @@ body.dragging-tabs {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(30, 30, 30, 0.7);
   border: 1px solid rgba(255, 255, 255, 0.15);
   color: rgba(255, 255, 255, 0.9);
   cursor: pointer;
@@ -454,6 +466,8 @@ body.dragging-tabs {
   pointer-events: none;
   transition: opacity 300ms ease, background 200ms ease;
   z-index: 1000;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .aura-settings.visible {
