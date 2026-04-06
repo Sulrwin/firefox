@@ -78,6 +78,19 @@
 
     root.appendChild(urlBar);
 
+    // Extensions popup
+    const extensionsPopup = document.createElement('div');
+    extensionsPopup.id = 'aura-extensions-popup';
+    extensionsPopup.className = 'aura-extensions-popup';
+    extensionsPopup.innerHTML = `
+      <div class="aura-extensions-header">
+        <span class="aura-extensions-title">Extensions</span>
+        <button class="aura-extensions-close" aria-label="Close">×</button>
+      </div>
+      <div class="aura-extensions-list" id="aura-extensions-list"></div>
+    `;
+    root.appendChild(extensionsPopup);
+
     // Bubble container
     const bubblesContainer = document.createElement('div');
     bubblesContainer.id = 'aura-bubbles';
@@ -197,6 +210,122 @@
           window.handleAuraAction({ action: 'openSettings' });
         }
       });
+    }
+    
+    // Extensions popup handlers
+    const extensionsBtn = document.getElementById('aura-extensions');
+    const extensionsPopup = document.getElementById('aura-extensions-popup');
+    const extensionsClose = extensionsPopup?.querySelector('.aura-extensions-close');
+    const extensionsList = document.getElementById('aura-extensions-list');
+    
+    if (extensionsBtn && extensionsPopup) {
+      extensionsBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isVisible = extensionsPopup.classList.contains('visible');
+        extensionsPopup.classList.toggle('visible');
+        if (!isVisible) {
+          loadExtensions();
+        }
+      });
+    }
+    
+    if (extensionsClose) {
+      extensionsClose.addEventListener('click', (e) => {
+        e.stopPropagation();
+        extensionsPopup.classList.remove('visible');
+      });
+    }
+    
+    document.addEventListener('click', (e) => {
+      if (extensionsPopup?.classList.contains('visible') && 
+          !extensionsPopup.contains(e.target)) {
+        extensionsPopup.classList.remove('visible');
+      }
+    });
+    
+    function loadExtensions() {
+      if (!extensionsList) return;
+      
+      try {
+        if (typeof AddonManager !== 'undefined') {
+          AddonManager.getAddonsByTypes(['extension']).then(addons => {
+            extensionsList.innerHTML = '';
+            
+            if (addons.length === 0) {
+              extensionsList.innerHTML = '<div class="aura-extensions-empty">No extensions installed</div>';
+              return;
+            }
+            
+            addons.forEach(addon => {
+              const item = document.createElement('div');
+              item.className = 'aura-extension-item';
+              item.dataset.id = addon.id;
+              
+              const icon = addon.iconURL || addon.icon64URL || '';
+              const iconContent = icon ? 
+                `<img src="${icon}" alt="">` : 
+                addon.name.charAt(0).toUpperCase();
+              
+              item.innerHTML = `
+                <div class="aura-extension-icon">${iconContent}</div>
+                <div class="aura-extension-info">
+                  <div class="aura-extension-name">${addon.name}</div>
+                  <div class="aura-extension-desc">${addon.version || 'Enabled'}</div>
+                </div>
+                <button class="aura-extension-toggle ${addon.isActive ? 'enabled' : ''}" 
+                        aria-label="Toggle extension" 
+                        data-id="${addon.id}"></button>
+                <button class="aura-extension-remove" aria-label="Remove extension" data-id="${addon.id}">×</button>
+              `;
+              
+              extensionsList.appendChild(item);
+            });
+            
+            // Toggle handler
+            extensionsList.querySelectorAll('.aura-extension-toggle').forEach(toggle => {
+              toggle.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const id = toggle.dataset.id;
+                try {
+                  const addon = await AddonManager.getAddonByID(id);
+                  if (addon.isActive) {
+                    await addon.disable();
+                  } else {
+                    await addon.enable();
+                  }
+                  toggle.classList.toggle('enabled');
+                } catch (err) {
+                  console.error('[AuraExtensions] Toggle error:', err);
+                }
+              });
+            });
+            
+            // Remove handler
+            extensionsList.querySelectorAll('.aura-extension-remove').forEach(btn => {
+              btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const id = btn.dataset.id;
+                try {
+                  const addon = await AddonManager.getAddonByID(id);
+                  if (confirm(`Remove "${addon.name}"?`)) {
+                    await addon.uninstall();
+                    loadExtensions();
+                  }
+                } catch (err) {
+                  console.error('[AuraExtensions] Remove error:', err);
+                }
+              });
+            });
+          }).catch(err => {
+            console.error('[AuraExtensions] Load error:', err);
+            extensionsList.innerHTML = '<div class="aura-extensions-empty">Could not load extensions</div>';
+          });
+        } else {
+          extensionsList.innerHTML = '<div class="aura-extensions-empty">AddonManager not available</div>';
+        }
+      } catch (err) {
+        console.error('[AuraExtensions] Error:', err);
+      }
     }
   }
 
