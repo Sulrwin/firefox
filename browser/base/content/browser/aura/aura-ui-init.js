@@ -301,8 +301,6 @@
         window.dispatchEvent(new CustomEvent('aura-maximize-popup'));
       });
     }
-      }
-    });
     
     const settingsStandalone = document.getElementById('aura-settings-standalone');
     if (settingsStandalone) {
