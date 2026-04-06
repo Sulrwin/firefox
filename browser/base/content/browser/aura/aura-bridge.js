@@ -80,17 +80,25 @@
           }
           break;
         case 'pinTab':
-          if (tab) {
-            const pinned = data.pinned;
-            const tabBrowserId = tab.linkedBrowser?.outerWindowID || tab._tPos;
-            const storageKey = 'aura-tab-pinned-' + tabBrowserId;
-            if (pinned) {
-              localStorage.setItem(storageKey, 'true');
-              gBrowser.pinTab(tab);
-            } else {
-              localStorage.removeItem(storageKey);
-              gBrowser.unpinTab(tab);
+          try {
+            if (tab) {
+              const pinned = data.pinned;
+              if (pinned) {
+                if (gBrowser.pinTab) {
+                  gBrowser.pinTab(tab);
+                } else if (tab.pinned !== undefined) {
+                  tab.pinned = true;
+                }
+              } else {
+                if (gBrowser.unpinTab) {
+                  gBrowser.unpinTab(tab);
+                } else if (tab.pinned !== undefined) {
+                  tab.pinned = false;
+                }
+              }
             }
+          } catch (e) {
+            console.error('[Aura] Pin tab error:', e);
           }
           break;
         case 'openExtensions':
@@ -142,13 +150,7 @@
           
           const favicon = tab.image || null;
           const tabId = 'tab-' + i;
-          let localPinned = false;
-          try {
-            const tabBrowserId = tab.linkedBrowser?.outerWindowID;
-            const storageKey = 'aura-tab-pinned-' + (tabBrowserId || i);
-            localPinned = localStorage.getItem(storageKey) === 'true';
-          } catch (e) {}
-          const isPinned = tab.pinned || localPinned;
+          const isPinned = tab.pinned || false;
           
           tabs.push({
             id: tabId,
