@@ -309,14 +309,15 @@ class AuraBubbleTabs {
     };
     
     this._handleContextMenu = (e) => {
+      if (e.button !== 2) return;
       const bubble = e.target.closest('.aura-bubble');
       if (!bubble) return;
       
-      e.preventDefault();
       const tabId = bubble.dataset.tabId;
       const tab = this.tabs.find(t => t.id === tabId);
       if (!tab || !tab.pinned) return;
       
+      e.preventDefault();
       this._showPinnedContextMenu(e.clientX, e.clientY, tabId, tab.pinnedUrl);
     };
     
@@ -366,7 +367,7 @@ class AuraBubbleTabs {
     document.addEventListener('mouseup', this._boundDragEnd);
     document.addEventListener('touchmove', this._boundTouchMove, { passive: true });
     document.addEventListener('touchend', this._boundDragEnd);
-    document.addEventListener('contextmenu', this._handleContextMenu);
+    document.addEventListener('mousedown', this._handleContextMenu);
   }
 
   _showPinnedContextMenu(x, y, tabId, pinnedUrl) {
@@ -411,15 +412,15 @@ class AuraBubbleTabs {
     this._currentContextMenu = menu;
     
     const closeHandler = (e) => {
-      if (!menu.contains(e.target) && e.target.id !== 'aura-pinned-context') {
-        menu.remove();
-        this._currentContextMenu = null;
-        document.removeEventListener('click', closeHandler);
-      }
+      if (e.button !== 0 && !menu.contains(e.target)) return;
+      if (e.target.id === 'aura-pinned-context') return;
+      menu.remove();
+      this._currentContextMenu = null;
+      document.removeEventListener('mousedown', closeHandler);
     };
     
     requestAnimationFrame(() => {
-      document.addEventListener('click', closeHandler);
+      document.addEventListener('mousedown', closeHandler);
     });
   }
 
