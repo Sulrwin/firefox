@@ -304,15 +304,16 @@ class AuraBubbleTabs {
     const bubbles = this.elements.container.querySelectorAll('.aura-bubble:not(.aura-bubble-add)');
     
     bubbles.forEach(bubble => {
+      // Click only fires if NOT dragging
       bubble.addEventListener('click', (e) => {
-        if (this._wasDragActivated) {
-          this._wasDragActivated = false;
+        if (this._isDragging) {
+          e.stopImmediatePropagation();
           return;
         }
         if (e.target.classList.contains('aura-bubble-close')) {
           e.stopPropagation();
           this.closeTab(bubble.dataset.tabId);
-        } else if (!bubble.classList.contains('dragging')) {
+        } else {
           this.selectTab(bubble.dataset.tabId);
         }
       });
@@ -320,6 +321,7 @@ class AuraBubbleTabs {
       bubble.addEventListener('mousedown', (e) => {
         if (e.target.classList.contains('aura-bubble-close')) return;
         if (e.button !== 0) return;
+        e.preventDefault();
         this._startDrag(e, bubble);
       });
 
@@ -338,23 +340,16 @@ class AuraBubbleTabs {
   }
 
   _startDrag(e, bubble) {
+    // Reset drag state
+    this._isDragging = false;
+    this._hasDragged = false;
+    
     const rect = bubble.getBoundingClientRect();
     this._dragStartX = e.clientX;
     this._dragStartY = e.clientY;
-    this._dragBubbleRect = rect;
-    this._dragBubbleBounds = {
-      left: rect.left,
-      right: rect.right,
-      top: rect.top,
-      bottom: rect.bottom
-    };
     this._dragTabId = bubble.dataset.tabId;
     this._dragBubble = bubble;
     this._isPinned = bubble.classList.contains('pinned');
-    this._hasDragged = false;
-    this._isDragActive = false;
-    this._lastX = e.clientX;
-    this._lastY = e.clientY;
   }
 
   _onDragMove(e) {
@@ -364,37 +359,32 @@ class AuraBubbleTabs {
     const dy = e.clientY - this._dragStartY;
     const dist = Math.sqrt(dx * dx + dy * dy);
 
-    if (!this._isDragActive && dist > 5) {
-      this._isDragActive = true;
-      this._wasDragActivated = true;
-      document.body.classList.add('dragging-tabs');
-      this._dragBubble.classList.add('dragging');
-
-      const ghost = document.createElement('div');
-      ghost.className = 'drag-ghost';
-      ghost.id = 'aura-drag-ghost';
-      ghost.style.left = (e.clientX - 28) + 'px';
-      ghost.style.top = (e.clientY - 28) + 'px';
-      const iconEl = this._dragBubble.querySelector('.aura-bubble-icon');
-      if (iconEl) {
-        ghost.textContent = iconEl.textContent || iconEl.innerHTML;
+    if (dist > 5) {
+      this._isDragging = true;
+      this._hasDragged = true;
+      
+      // Create ghost if first drag move
+      let ghost = document.getElementById('aura-drag-ghost');
+      if (!ghost) {
+        document.body.classList.add('dragging-tabs');
+        this._dragBubble.classList.add('dragging');
+        
+        ghost = document.createElement('div');
+        ghost.className = 'drag-ghost';
+        ghost.id = 'aura-drag-ghost';
+        const iconEl = this._dragBubble.querySelector('.aura-bubble-icon');
+        if (iconEl) {
+          ghost.innerHTML = iconEl.innerHTML;
+        }
+        document.body.appendChild(ghost);
       }
-      document.body.appendChild(ghost);
-    }
-
-    if (!this._isDragActive) return;
-
-    this._hasDragged = true;
-    this._lastX = e.clientX;
-    this._lastY = e.clientY;
-
-    const ghost = document.getElementById('aura-drag-ghost');
-    if (ghost) {
+      
+      // Position ghost centered on cursor
       ghost.style.left = (e.clientX - 28) + 'px';
       ghost.style.top = (e.clientY - 28) + 'px';
+      
+      this._updateDropPreview(e.clientX, e.clientY);
     }
-
-    this._updateDropPreview(e.clientX, e.clientY);
   }
 
   _updateDropPreview(x, y) {
@@ -439,27 +429,27 @@ class AuraBubbleTabs {
 
     const tabId = this._dragTabId;
     const dropInfo = this._dropInfo;
-    const didDrag = this._hasDragged && this._isDragActive;
+    const didDrag = this._hasDragged && this._isDragging;
 
-    if (this._isDragActive) {
-      const ghost = document.getElementById('aura-drag-ghost');
-      if (ghost) ghost.remove();
+    // Clean up ghost and preview
+    const ghost = document.getElementById('aura-drag-ghost');
+    if (ghost) ghost.remove();
 
-      const preview = document.getElementById('aura-drop-preview');
-      if (preview) preview.remove();
+    const preview = document.getElementById('aura-drop-preview');
+    if (preview) preview.remove();
 
-      if (this._dragBubble) {
-        this._dragBubble.classList.remove('dragging');
-      }
+    if (this._dragBubble) {
+      this._dragBubble.classList.remove('dragging');
     }
 
+    // Reset drag state
     this._dragTabId = null;
     this._dragBubble = null;
-    this._placeholder = null;
     this._dropInfo = null;
     this._hasDragged = false;
-    this._isDragActive = false;
+    this._isDragging = false;
 
+    // Execute move if we dragged
     if (didDrag && tabId && dropInfo) {
       this._moveTabAt(tabId, dropInfo.container, dropInfo.insertBeforeTabId);
     }
