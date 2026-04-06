@@ -66,6 +66,17 @@
             setTimeout(syncTabs, 1500);
           }
           break;
+        case 'navigateInPopup':
+          if (url) {
+            window.dispatchEvent(new CustomEvent('aura-show-popup', { detail: { url } }));
+          }
+          break;
+        case 'closePopup':
+          window.dispatchEvent(new CustomEvent('aura-close-popup'));
+          break;
+        case 'maximizePopup':
+          window.dispatchEvent(new CustomEvent('aura-maximize-popup'));
+          break;
         case 'goBack':
           if (gBrowser.selectedBrowser?.canGoBack) {
             gBrowser.selectedBrowser.goBack();

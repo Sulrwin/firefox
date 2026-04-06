@@ -323,7 +323,6 @@ class AuraBubbleTabs {
     const bubbles = this.elements.container.querySelectorAll('.aura-bubble:not(.aura-bubble-add)');
     
     bubbles.forEach(bubble => {
-      // Click only fires if NOT dragging
       bubble.addEventListener('click', (e) => {
         if (this._isDragging) {
           e.stopImmediatePropagation();
@@ -332,8 +331,19 @@ class AuraBubbleTabs {
         if (e.target.classList.contains('aura-bubble-close')) {
           e.stopPropagation();
           this.closeTab(bubble.dataset.tabId);
+          return;
+        }
+        
+        const tabId = bubble.dataset.tabId;
+        const tab = this.tabs.find(t => t.id === tabId);
+        
+        if (tab?.pinned && tab?.urlChanged && tab?.url) {
+          e.stopPropagation();
+          if (window.handleAuraAction) {
+            window.handleAuraAction({ action: 'navigateInPopup', url: tab.url });
+          }
         } else {
-          this.selectTab(bubble.dataset.tabId);
+          this.selectTab(tabId);
         }
       });
 

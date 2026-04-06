@@ -159,6 +159,37 @@
 
     root.appendChild(newTabBar);
 
+    // Popup window
+    const popup = document.createElement('div');
+    popup.id = 'aura-popup';
+    popup.className = 'aura-popup';
+    
+    const popupControls = document.createElement('div');
+    popupControls.className = 'aura-popup-controls';
+    
+    const popupClose = document.createElement('button');
+    popupClose.id = 'aura-popup-close';
+    popupClose.className = 'aura-popup-btn';
+    popupClose.setAttribute('aria-label', 'Close popup');
+    popupClose.textContent = '×';
+    popupControls.appendChild(popupClose);
+    
+    const popupMaximize = document.createElement('button');
+    popupMaximize.id = 'aura-popup-maximize';
+    popupMaximize.className = 'aura-popup-btn';
+    popupMaximize.setAttribute('aria-label', 'Open in new tab');
+    popupMaximize.textContent = '↗';
+    popupControls.appendChild(popupMaximize);
+    
+    popup.appendChild(popupControls);
+    
+    const popupIframe = document.createElement('iframe');
+    popupIframe.id = 'aura-popup-iframe';
+    popupIframe.className = 'aura-popup-iframe';
+    popup.appendChild(popupIframe);
+    
+    root.appendChild(popup);
+
     return true;
   }
 
@@ -226,6 +257,50 @@
     window.addEventListener('aura-sync-tabs', (e) => {
       if (auraTabs && e.detail && e.detail.tabs) {
         auraTabs.setTabs(e.detail.tabs);
+      }
+    });
+    
+    // Popup event handlers
+    const popup = document.getElementById('aura-popup');
+    const popupIframe = document.getElementById('aura-popup-iframe');
+    const popupClose = document.getElementById('aura-popup-close');
+    const popupMaximize = document.getElementById('aura-popup-maximize');
+    
+    window.addEventListener('aura-show-popup', (e) => {
+      if (popup && popupIframe && e.detail?.url) {
+        popupIframe.src = e.detail.url;
+        popup.classList.add('visible');
+      }
+    });
+    
+    window.addEventListener('aura-close-popup', () => {
+      if (popup) {
+        popup.classList.remove('visible');
+        if (popupIframe) {
+          popupIframe.src = 'about:blank';
+        }
+      }
+    });
+    
+    window.addEventListener('aura-maximize-popup', () => {
+      if (popupIframe && popupIframe.src && popupIframe.src !== 'about:blank') {
+        const url = popupIframe.src;
+        window.handleAuraAction({ action: 'newTab', url });
+        window.dispatchEvent(new CustomEvent('aura-close-popup'));
+      }
+    });
+    
+    if (popupClose) {
+      popupClose.addEventListener('click', () => {
+        window.dispatchEvent(new CustomEvent('aura-close-popup'));
+      });
+    }
+    
+    if (popupMaximize) {
+      popupMaximize.addEventListener('click', () => {
+        window.dispatchEvent(new CustomEvent('aura-maximize-popup'));
+      });
+    }
       }
     });
     
