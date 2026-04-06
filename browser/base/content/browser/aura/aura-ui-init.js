@@ -78,14 +78,6 @@
 
     root.appendChild(urlBar);
 
-    // Standalone settings button (always visible, right side)
-    const settingsStandalone = document.createElement('button');
-    settingsStandalone.id = 'aura-settings-standalone';
-    settingsStandalone.className = 'aura-settings-standalone';
-    settingsStandalone.setAttribute('aria-label', 'Settings');
-    settingsStandalone.textContent = '⚙';
-    root.appendChild(settingsStandalone);
-
     // Bubble container
     const bubblesContainer = document.createElement('div');
     bubblesContainer.id = 'aura-bubbles';
