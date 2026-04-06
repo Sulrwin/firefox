@@ -48,8 +48,10 @@
                 triggerBrowser: gBrowser.selectedBrowser,
                 initiatingWindow: window
               });
+              setTimeout(syncTabs, 500);
             } catch (e) {
               gBrowser.selectedBrowser.loadURI(url);
+              setTimeout(syncTabs, 500);
             }
           }
           break;
