@@ -44,17 +44,12 @@
         case 'navigate':
           if (url && gBrowser.selectedBrowser) {
             try {
-              const triggeringPrincipal = Services.scriptSecurityManager.getSystemPrincipal();
-              gBrowser.loadURI(url, {
-                triggeringPrincipal: triggeringPrincipal,
-                targetBrowser: gBrowser.selectedBrowser
+              openWebLinkIn(url, 'current', {
+                triggerBrowser: gBrowser.selectedBrowser,
+                initiatingWindow: window
               });
             } catch (e) {
-              try {
-                gBrowser.loadURI(url, { triggererPrincipal: gBrowser.selectedBrowser.contentPrincipal });
-              } catch (e2) {
-                gBrowser.selectedBrowser.loadURI(url);
-              }
+              gBrowser.selectedBrowser.loadURI(url);
             }
           }
           break;
