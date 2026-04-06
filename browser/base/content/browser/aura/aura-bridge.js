@@ -138,11 +138,9 @@
           }
           
           const favicon = tab.image || null;
-          // Use a stable tab ID based on the tab's position or browser ID
-          const tabBrowserId = tab.linkedBrowser?.outerWindowID || tab._tPos || i;
-          const tabId = 'tab-' + tabBrowserId;
-          // Check localStorage for pinned state
-          const storageKey = 'aura-tab-pinned-' + tabBrowserId;
+          const tabBrowserId = tab.linkedBrowser?.outerWindowID;
+          const tabId = 'tab-' + i;
+          const storageKey = tabBrowserId ? 'aura-tab-pinned-' + tabBrowserId : 'aura-tab-pinned-' + i;
           const localPinned = localStorage.getItem(storageKey) === 'true';
           const isPinned = tab.pinned || localPinned;
           
