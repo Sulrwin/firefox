@@ -267,30 +267,60 @@
                 item.className = 'aura-extension-item';
                 item.dataset.id = addon.id;
                 
-                const name = addon.name ? String(addon.name).replace(/"/g, '&quot;') : 'Unknown';
+                const name = addon.name ? String(addon.name) : 'Unknown';
                 const icon = addon.iconURL || addon.icon64URL || '';
-                const iconContent = icon ? 
-                  `<img src="${icon}" alt="" onerror="this.parentElement.textContent='${name.charAt(0).toUpperCase()}'">` : 
-                  name.charAt(0).toUpperCase();
+                
+                const iconEl = document.createElement('div');
+                iconEl.className = 'aura-extension-icon';
+                if (icon) {
+                  const img = document.createElement('img');
+                  img.src = icon;
+                  img.alt = '';
+                  iconEl.appendChild(img);
+                } else {
+                  iconEl.textContent = name.charAt(0).toUpperCase();
+                }
                 
                 const isBuiltin = addon.isBuiltin || addon.type === 'theme' || addon.sYSTEMADDON;
-                const description = addon.description ? String(addon.description).replace(/"/g, '&quot;') : (addon.version || 'Enabled');
-                const builtinBadge = isBuiltin ? '<span class="aura-extension-builtin">Built-in</span>' : '';
-                const toggleClass = addon.isActive ? 'enabled' : '';
+                const description = addon.description ? String(addon.description) : (addon.version || 'Enabled');
                 
-                item.innerHTML = `
-                  <div class="aura-extension-icon">${iconContent}</div>
-                  <div class="aura-extension-info">
-                    <div class="aura-extension-name">${name}${builtinBadge}</div>
-                    <div class="aura-extension-desc">${description}</div>
-                  </div>
-                  ${isBuiltin ? '' : `
-                    <button class="aura-extension-toggle ${toggleClass}" 
-                            aria-label="Toggle extension" 
-                            data-id="${addon.id}"></button>
-                    <button class="aura-extension-remove" aria-label="Remove extension" data-id="${addon.id}">×</button>
-                  `}
-                `;
+                const infoEl = document.createElement('div');
+                infoEl.className = 'aura-extension-info';
+                
+                const nameEl = document.createElement('div');
+                nameEl.className = 'aura-extension-name';
+                nameEl.textContent = name;
+                if (isBuiltin) {
+                  const badge = document.createElement('span');
+                  badge.className = 'aura-extension-builtin';
+                  badge.textContent = 'Built-in';
+                  nameEl.appendChild(badge);
+                }
+                
+                const descEl = document.createElement('div');
+                descEl.className = 'aura-extension-desc';
+                descEl.textContent = description;
+                
+                infoEl.appendChild(nameEl);
+                infoEl.appendChild(descEl);
+                
+                item.appendChild(iconEl);
+                item.appendChild(infoEl);
+                
+                if (!isBuiltin) {
+                  const toggle = document.createElement('button');
+                  toggle.className = 'aura-extension-toggle' + (addon.isActive ? ' enabled' : '');
+                  toggle.setAttribute('aria-label', 'Toggle extension');
+                  toggle.dataset.id = addon.id;
+                  item.appendChild(toggle);
+                  
+                  const remove = document.createElement('button');
+                  remove.className = 'aura-extension-remove';
+                  remove.setAttribute('aria-label', 'Remove extension');
+                  remove.dataset.id = addon.id;
+                  remove.textContent = '×';
+                  item.appendChild(remove);
+                }
                 
                 extensionsList.appendChild(item);
               } catch (err) {
