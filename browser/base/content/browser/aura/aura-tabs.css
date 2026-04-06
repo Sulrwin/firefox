@@ -456,18 +456,18 @@ body.dragging-tabs {
 /* === Extensions Popup === */
 .aura-extensions-popup {
   position: fixed;
-  top: 60px;
-  right: 20px;
-  width: 320px;
-  max-height: 400px;
-  background: rgba(30, 30, 30, 0.85);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 400px;
+  max-height: 500px;
+  background: rgba(30, 30, 30, 0.9);
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 16px;
   overflow: hidden;
   opacity: 0;
   pointer-events: none;
-  transform: translateY(-10px);
-  transition: opacity 200ms ease, transform 200ms ease;
+  transition: opacity 200ms ease;
   z-index: 3000;
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
@@ -478,7 +478,6 @@ body.dragging-tabs {
 .aura-extensions-popup.visible {
   opacity: 1;
   pointer-events: auto;
-  transform: translateY(0);
 }
 
 .aura-extensions-header {
@@ -585,6 +584,16 @@ body.dragging-tabs {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.aura-extension-builtin {
+  font-size: 10px;
+  padding: 2px 6px;
+  background: rgba(100, 150, 255, 0.3);
+  color: rgba(150, 200, 255, 0.9);
+  border-radius: 4px;
+  margin-left: 8px;
+  flex-shrink: 0;
 }
 
 .aura-extension-toggle {

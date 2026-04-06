@@ -266,16 +266,22 @@
                 `<img src="${icon}" alt="">` : 
                 addon.name.charAt(0).toUpperCase();
               
+              const isBuiltin = addon.isBuiltin || addon.type === 'theme' || addon.sYSTEMADDON;
+              const description = addon.description || addon.version || 'Enabled';
+              const builtinBadge = isBuiltin ? '<span class="aura-extension-builtin">Built-in</span>' : '';
+              
               item.innerHTML = `
                 <div class="aura-extension-icon">${iconContent}</div>
                 <div class="aura-extension-info">
-                  <div class="aura-extension-name">${addon.name}</div>
-                  <div class="aura-extension-desc">${addon.version || 'Enabled'}</div>
+                  <div class="aura-extension-name">${addon.name}${builtinBadge}</div>
+                  <div class="aura-extension-desc">${description}</div>
                 </div>
-                <button class="aura-extension-toggle ${addon.isActive ? 'enabled' : ''}" 
-                        aria-label="Toggle extension" 
-                        data-id="${addon.id}"></button>
-                <button class="aura-extension-remove" aria-label="Remove extension" data-id="${addon.id}">×</button>
+                ${isBuiltin ? '' : `
+                  <button class="aura-extension-toggle ${addon.isActive ? 'enabled' : ''}" 
+                          aria-label="Toggle extension" 
+                          data-id="${addon.id}"></button>
+                  <button class="aura-extension-remove" aria-label="Remove extension" data-id="${addon.id}">×</button>
+                `}
               `;
               
               extensionsList.appendChild(item);
