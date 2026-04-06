@@ -92,6 +92,23 @@
         case 'openSettings':
           openPreferences();
           break;
+        case 'reorderTabs':
+          try {
+            const tabs = data.tabs;
+            for (let i = 0; i < tabs.length; i++) {
+              const tabId = tabs[i].id;
+              const tabIndex = parseInt(tabId.replace('tab-', ''));
+              if (tabIndex >= 0 && tabIndex < gBrowser.tabs.length) {
+                const tab = gBrowser.tabs[tabIndex];
+                if (tab._tPos !== i) {
+                  gBrowser.moveTabTo(tab, i);
+                }
+              }
+            }
+          } catch (e) {
+            console.error('[Aura] Reorder tabs error:', e);
+          }
+          break;
       }
     }
 

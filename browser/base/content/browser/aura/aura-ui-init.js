@@ -163,6 +163,11 @@
           window.handleAuraAction({ action: 'pinTab', tabId, pinned });
         }
       },
+      onTabReorder: (tabs) => {
+        if (window.handleAuraAction) {
+          window.handleAuraAction({ action: 'reorderTabs', tabs });
+        }
+      },
       onBack: () => {
         if (window.handleAuraAction) {
           window.handleAuraAction({ action: 'goBack' });

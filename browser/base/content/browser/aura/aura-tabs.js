@@ -10,6 +10,7 @@ class AuraBubbleTabs {
     this.onTabClose = options.onTabClose || (() => {});
     this.onNewTab = options.onNewTab || (() => {});
     this.onTabPin = options.onTabPin || (() => {});
+    this.onTabReorder = options.onTabReorder || (() => {});
     this.onBack = options.onBack || (() => {});
     this.onForward = options.onForward || (() => {});
     this.onRefresh = options.onRefresh || (() => {});
@@ -363,7 +364,7 @@ class AuraBubbleTabs {
     const dy = e.clientY - this._dragStartY;
     const dist = Math.sqrt(dx * dx + dy * dy);
 
-    if (!this._isDragActive && dist > 10) {
+    if (!this._isDragActive && dist > 5) {
       this._isDragActive = true;
       this._wasDragActivated = true;
       document.body.classList.add('dragging-tabs');
@@ -372,11 +373,11 @@ class AuraBubbleTabs {
       const ghost = document.createElement('div');
       ghost.className = 'drag-ghost';
       ghost.id = 'aura-drag-ghost';
-      ghost.style.left = e.clientX + 'px';
-      ghost.style.top = e.clientY + 'px';
+      ghost.style.left = (e.clientX - 28) + 'px';
+      ghost.style.top = (e.clientY - 28) + 'px';
       const iconEl = this._dragBubble.querySelector('.aura-bubble-icon');
       if (iconEl) {
-        ghost.textContent = iconEl.textContent;
+        ghost.textContent = iconEl.textContent || iconEl.innerHTML;
       }
       document.body.appendChild(ghost);
     }
@@ -389,8 +390,8 @@ class AuraBubbleTabs {
 
     const ghost = document.getElementById('aura-drag-ghost');
     if (ghost) {
-      ghost.style.left = e.clientX + 'px';
-      ghost.style.top = e.clientY + 'px';
+      ghost.style.left = (e.clientX - 28) + 'px';
+      ghost.style.top = (e.clientY - 28) + 'px';
     }
 
     this._updateDropPreview(e.clientX, e.clientY);
@@ -507,6 +508,10 @@ class AuraBubbleTabs {
       ? [...sameGroupTabs, ...otherTabs]
       : [...otherTabs, ...sameGroupTabs];
 
+    if (this.onTabReorder) {
+      this.onTabReorder(this.tabs);
+    }
+    
     this.render();
   }
 
