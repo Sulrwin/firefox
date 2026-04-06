@@ -262,34 +262,40 @@
             }
             
             addons.forEach(addon => {
-              const item = document.createElement('div');
-              item.className = 'aura-extension-item';
-              item.dataset.id = addon.id;
-              
-              const icon = addon.iconURL || addon.icon64URL || '';
-              const iconContent = icon ? 
-                `<img src="${icon}" alt="">` : 
-                addon.name.charAt(0).toUpperCase();
-              
-              const isBuiltin = addon.isBuiltin || addon.type === 'theme' || addon.sYSTEMADDON;
-              const description = addon.description || addon.version || 'Enabled';
-              const builtinBadge = isBuiltin ? '<span class="aura-extension-builtin">Built-in</span>' : '';
-              
-              item.innerHTML = `
-                <div class="aura-extension-icon">${iconContent}</div>
-                <div class="aura-extension-info">
-                  <div class="aura-extension-name">${addon.name}${builtinBadge}</div>
-                  <div class="aura-extension-desc">${description}</div>
-                </div>
-                ${isBuiltin ? '' : `
-                  <button class="aura-extension-toggle ${addon.isActive ? 'enabled' : ''}" 
-                          aria-label="Toggle extension" 
-                          data-id="${addon.id}"></button>
-                  <button class="aura-extension-remove" aria-label="Remove extension" data-id="${addon.id}">×</button>
-                `}
-              `;
-              
-              extensionsList.appendChild(item);
+              try {
+                const item = document.createElement('div');
+                item.className = 'aura-extension-item';
+                item.dataset.id = addon.id;
+                
+                const name = addon.name ? String(addon.name).replace(/"/g, '&quot;') : 'Unknown';
+                const icon = addon.iconURL || addon.icon64URL || '';
+                const iconContent = icon ? 
+                  `<img src="${icon}" alt="" onerror="this.parentElement.textContent='${name.charAt(0).toUpperCase()}'">` : 
+                  name.charAt(0).toUpperCase();
+                
+                const isBuiltin = addon.isBuiltin || addon.type === 'theme' || addon.sYSTEMADDON;
+                const description = addon.description ? String(addon.description).replace(/"/g, '&quot;') : (addon.version || 'Enabled');
+                const builtinBadge = isBuiltin ? '<span class="aura-extension-builtin">Built-in</span>' : '';
+                const toggleClass = addon.isActive ? 'enabled' : '';
+                
+                item.innerHTML = `
+                  <div class="aura-extension-icon">${iconContent}</div>
+                  <div class="aura-extension-info">
+                    <div class="aura-extension-name">${name}${builtinBadge}</div>
+                    <div class="aura-extension-desc">${description}</div>
+                  </div>
+                  ${isBuiltin ? '' : `
+                    <button class="aura-extension-toggle ${toggleClass}" 
+                            aria-label="Toggle extension" 
+                            data-id="${addon.id}"></button>
+                    <button class="aura-extension-remove" aria-label="Remove extension" data-id="${addon.id}">×</button>
+                  `}
+                `;
+                
+                extensionsList.appendChild(item);
+              } catch (err) {
+                console.error('[AuraExtensions] Error rendering addon:', err);
+              }
             });
             
             // Toggle handler
