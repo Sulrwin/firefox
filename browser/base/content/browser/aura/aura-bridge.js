@@ -149,7 +149,6 @@
             localPinned = localStorage.getItem(storageKey) === 'true';
           } catch (e) {}
           const isPinned = tab.pinned || localPinned;
-          const isPinned = tab.pinned || localPinned;
           
           tabs.push({
             id: tabId,
