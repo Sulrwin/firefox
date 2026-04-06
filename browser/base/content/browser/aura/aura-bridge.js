@@ -42,17 +42,24 @@
           gBrowser.selectedTab = gBrowser.addTrustedTab(url || 'about:newtab');
           break;
         case 'navigate':
-          if (url && gBrowser.selectedTab) {
+          if (url && gBrowser.selectedBrowser) {
             try {
-              gBrowser.loadURI(url, {
-                triggeringPrincipal: gBrowser.selectedBrowser.contentPrincipal,
-                flags: gBrowser.LOAD_FLAGS_NONE
+              const principal = gBrowser.selectedBrowser.contentPrincipal || Services.scriptSecurityManager.getSystemPrincipal();
+              gBrowser.selectedBrowser.loadURI(url, {
+                triggeringPrincipal: principal,
+                flags: Ci.nsIWebNavigation.LOAD_FLAGS_NONE
               });
             } catch (e) {
               try {
-                gBrowser.loadURI(url);
+                gBrowser.selectedBrowser.loadURI(url, {
+                  triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal()
+                });
               } catch (e2) {
-                gBrowser.selectedBrowser.loadURI(url);
+                const ioService = Services.io;
+                const uri = ioService.newURI(url);
+                gBrowser.selectedBrowser.loadURIWithConstraints(uri, {
+                  triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal()
+                });
               }
             }
           }
