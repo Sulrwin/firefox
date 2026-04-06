@@ -48,11 +48,20 @@
                 triggerBrowser: gBrowser.selectedBrowser,
                 initiatingWindow: window
               });
-              setTimeout(syncTabs, 500);
             } catch (e) {
-              gBrowser.selectedBrowser.loadURI(url);
-              setTimeout(syncTabs, 500);
+              try {
+                gBrowser.selectedBrowser.loadURI(url);
+              } catch (e2) {
+                gBrowser.loadURI(url, {
+                  triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal(),
+                  targetBrowser: gBrowser.selectedBrowser
+                });
+              }
             }
+            // Sync multiple times to catch favicon updates
+            setTimeout(syncTabs, 100);
+            setTimeout(syncTabs, 500);
+            setTimeout(syncTabs, 1500);
           }
           break;
         case 'goBack':
@@ -135,17 +144,21 @@
     let lastTabCount = gBrowser.tabs.length;
     let lastSelectedIndex = -1;
     let lastSelectedUrl = '';
+    let lastFavicon = '';
     setInterval(() => {
       const currentIndex = gBrowser.tabContainer.selectedIndex;
       const currentTab = gBrowser.selectedTab;
       const currentUrl = currentTab?.linkedBrowser?.currentURI?.spec || '';
+      const currentFavicon = currentTab?.image || '';
       
       if (gBrowser.tabs.length !== lastTabCount || 
           currentIndex !== lastSelectedIndex || 
-          currentUrl !== lastSelectedUrl) {
+          currentUrl !== lastSelectedUrl ||
+          currentFavicon !== lastFavicon) {
         lastTabCount = gBrowser.tabs.length;
         lastSelectedIndex = currentIndex;
         lastSelectedUrl = currentUrl;
+        lastFavicon = currentFavicon;
         syncTabs();
       }
     }, 200);
@@ -155,9 +168,12 @@
     gBrowser.addEventListener('TabClose', () => syncTabs());
     gBrowser.addEventListener('TabSelect', () => syncTabs());
     
-    // Listen for page load events on the selected browser
-    gBrowser.selectedBrowser.addEventListener('load', () => syncTabs(), true);
-    gBrowser.selectedBrowser.addEventListener('DOMContentLoaded', () => syncTabs(), true);
+    // Listen for page load events
+    gBrowser.addEventListener('load', (e) => {
+      if (e.target === gBrowser.selectedBrowser?.contentDocument) {
+        syncTabs();
+      }
+    }, true);
 
     setTimeout(syncTabs, 500);
   }
