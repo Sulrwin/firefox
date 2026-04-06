@@ -205,6 +205,26 @@ body.dragging-tabs {
   background: rgba(255, 255, 255, 0.25);
 }
 
+.aura-project, .aura-settings {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  color: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: bold;
+  transition: background 200ms ease;
+}
+
+.aura-project:hover, .aura-settings:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
 /* === Bubble Container === */
 .aura-bubble-container {
   position: fixed;
@@ -468,14 +488,4 @@ body.dragging-tabs {
   z-index: 1000;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-}
-
-.aura-settings.visible {
-  opacity: 0.6;
-  pointer-events: auto;
-}
-
-.aura-settings:hover {
-  background: rgba(255, 255, 255, 0.2);
-  opacity: 1;
 }

@@ -39,6 +39,14 @@
     urlBar.id = 'aura-url-bar';
     urlBar.className = 'aura-url-bar';
     
+    // Project button
+    const projectBtn = document.createElement('button');
+    projectBtn.id = 'aura-project';
+    projectBtn.className = 'aura-project';
+    projectBtn.setAttribute('aria-label', 'Project Aura');
+    projectBtn.textContent = 'A';
+    urlBar.appendChild(projectBtn);
+
     const refreshBtn = document.createElement('button');
     refreshBtn.id = 'aura-refresh';
     refreshBtn.className = 'aura-refresh';
@@ -61,15 +69,14 @@
     extensionsBtn.textContent = '🧩';
     urlBar.appendChild(extensionsBtn);
 
-    root.appendChild(urlBar);
-
-    // Settings button
     const settingsBtn = document.createElement('button');
     settingsBtn.id = 'aura-settings';
     settingsBtn.className = 'aura-settings';
     settingsBtn.setAttribute('aria-label', 'Settings');
-    settingsBtn.textContent = '☰';
-    root.appendChild(settingsBtn);
+    settingsBtn.textContent = '⚙';
+    urlBar.appendChild(settingsBtn);
+
+    root.appendChild(urlBar);
 
     // Bubble container
     const bubblesContainer = document.createElement('div');
