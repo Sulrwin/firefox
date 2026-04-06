@@ -130,14 +130,14 @@
             if (tab) {
               const tabIndex = index;
               const pinnedUrl = pinnedUrls.get(tabIndex);
-              if (pinnedUrl) {
-                if (gBrowser.selectedTab !== tab) {
-                  gBrowser.selectedTab = tab;
-                }
-                openWebLinkIn(pinnedUrl, 'current', {
-                  triggerBrowser: tab.linkedBrowser,
-                  initiatingWindow: window
-                });
+              console.log('[Aura] restorePinnedUrl:', { tabIndex, pinnedUrl, tabExists: !!tab });
+              if (pinnedUrl && tab.linkedBrowser) {
+                gBrowser.selectedTab = tab;
+                setTimeout(() => {
+                  if (tab.linkedBrowser) {
+                    tab.linkedBrowser.loadURI(pinnedUrl);
+                  }
+                }, 50);
               }
             }
           } catch (e) {
@@ -208,12 +208,13 @@
           const favicon = tab.image || null;
           const tabId = 'tab-' + i;
           const isPinned = tab.pinned || false;
+          
+          if (isPinned && !pinnedUrls.has(i) && url && url !== 'about:blank' && !url.startsWith('about:')) {
+            pinnedUrls.set(i, url);
+          }
+          
           const pinnedUrl = pinnedUrls.get(i) || null;
           const urlChanged = isPinned && pinnedUrl && url !== pinnedUrl && url !== 'about:blank';
-          
-          if (isPinned && pinnedUrl) {
-            console.log('[Aura] Pinned tab sync:', { i, url, pinnedUrl, urlChanged });
-          }
           
           tabs.push({
             id: tabId,
