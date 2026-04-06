@@ -127,18 +127,23 @@
           break;
         case 'restorePinnedUrl':
           try {
+            console.log('[Aura] restorePinnedUrl called:', { tabId, index, pinnedUrlsSize: pinnedUrls.size });
             if (tab) {
               const tabIndex = index;
               const pinnedUrl = pinnedUrls.get(tabIndex);
-              console.log('[Aura] restorePinnedUrl:', { tabIndex, pinnedUrl, tabExists: !!tab });
-              if (pinnedUrl && tab.linkedBrowser) {
-                gBrowser.selectedTab = tab;
-                setTimeout(() => {
-                  if (tab.linkedBrowser) {
-                    tab.linkedBrowser.loadURI(pinnedUrl);
-                  }
-                }, 50);
+              console.log('[Aura] restorePinnedUrl:', { tabIndex, pinnedUrl, tabExists: !!tab, linkedBrowser: !!tab.linkedBrowser });
+              if (pinnedUrl) {
+                if (tab.linkedBrowser) {
+                  const browser = tab.linkedBrowser;
+                  gBrowser.selectedTab = tab;
+                  browser.loadURI(pinnedUrl);
+                }
+              } else {
+                console.log('[Aura] No pinned URL found for index:', tabIndex);
+                console.log('[Aura] Available pinned URLs:', [...pinnedUrls.entries()]);
               }
+            } else {
+              console.log('[Aura] Tab not found for index:', index);
             }
           } catch (e) {
             console.error('[Aura] Restore pinned URL error:', e);
@@ -209,12 +214,15 @@
           const tabId = 'tab-' + i;
           const isPinned = tab.pinned || false;
           
-          if (isPinned && !pinnedUrls.has(i) && url && url !== 'about:blank' && !url.startsWith('about:')) {
-            pinnedUrls.set(i, url);
+          if (isPinned && url && url !== 'about:blank') {
+            if (!pinnedUrls.has(i) || (pinnedUrls.get(i) && pinnedUrls.get(i) !== url)) {
+              pinnedUrls.set(i, url);
+              console.log('[Aura] Stored pinned URL:', { i, url, pinnedUrls: [...pinnedUrls.entries()] });
+            }
           }
           
           const pinnedUrl = pinnedUrls.get(i) || null;
-          const urlChanged = isPinned && pinnedUrl && url !== pinnedUrl && url !== 'about:blank';
+          const urlChanged = isPinned && pinnedUrl && url !== pinnedUrl;
           
           tabs.push({
             id: tabId,
@@ -270,28 +278,21 @@
     }, 200);
 
     // Intercept new tab creation and redirect to popup
-    const originalAddTrustedTab = gBrowser.addTrustedTab.bind(gBrowser);
-    gBrowser.addTrustedTab = function(url, options) {
-      if (url && !url.startsWith('about:')) {
-        window.dispatchEvent(new CustomEvent('aura-show-popup', { detail: { url } }));
-        return gBrowser.selectedTab;
-      }
-      return originalAddTrustedTab(url, options);
-    };
-    
-    // Also intercept TabOpen to catch any new tabs
     gBrowser.addEventListener('TabOpen', (e) => {
       const tab = e.target;
+      let url = null;
+      
       if (tab?.linkedBrowser?.currentURI?.spec) {
-        const url = tab.linkedBrowser.currentURI.spec;
-        if (!url.startsWith('about:')) {
-          setTimeout(() => {
-            if (tab && tab.parentNode) {
-              gBrowser.removeTab(tab);
-            }
-          }, 50);
-          window.dispatchEvent(new CustomEvent('aura-show-popup', { detail: { url } }));
-        }
+        url = tab.linkedBrowser.currentURI.spec;
+      }
+      
+      if (url && !url.startsWith('about:') && !url.startsWith('chrome:')) {
+        setTimeout(() => {
+          if (tab && tab.parentNode) {
+            gBrowser.removeTab(tab);
+          }
+        }, 10);
+        window.dispatchEvent(new CustomEvent('aura-show-popup', { detail: { url } }));
       }
       syncTabs();
     });
