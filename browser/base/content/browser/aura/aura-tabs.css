@@ -112,8 +112,8 @@ body.dragging-tabs {
   cursor: pointer;
   transition: opacity 300ms ease, height 200ms ease, width 200ms ease, background 200ms ease;
   z-index: 2000;
-  opacity: 0.8;
-  pointer-events: auto;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .aura-trigger:hover {
