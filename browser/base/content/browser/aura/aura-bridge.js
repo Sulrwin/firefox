@@ -44,23 +44,13 @@
         case 'navigate':
           if (url && gBrowser.selectedBrowser) {
             try {
-              const principal = gBrowser.selectedBrowser.contentPrincipal || Services.scriptSecurityManager.getSystemPrincipal();
-              gBrowser.selectedBrowser.loadURI(url, {
-                triggeringPrincipal: principal,
-                flags: Ci.nsIWebNavigation.LOAD_FLAGS_NONE
+              const uri = Services.io.newURI(url);
+              const triggeringPrincipal = Services.scriptSecurityManager.getSystemPrincipal();
+              gBrowser.selectedTab.loadURI(uri, {
+                triggeringPrincipal: triggeringPrincipal
               });
             } catch (e) {
-              try {
-                gBrowser.selectedBrowser.loadURI(url, {
-                  triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal()
-                });
-              } catch (e2) {
-                const ioService = Services.io;
-                const uri = ioService.newURI(url);
-                gBrowser.selectedBrowser.loadURIWithConstraints(uri, {
-                  triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal()
-                });
-              }
+              gBrowser.selectedTab.loadURI(url);
             }
           }
           break;
