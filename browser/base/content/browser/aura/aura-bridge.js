@@ -126,41 +126,32 @@
           }
           break;
         case 'restorePinnedUrl':
-          try {
-            console.log('[Aura] restorePinnedUrl called:', { tabId, index, pinnedUrlsSize: pinnedUrls.size });
-            if (tab) {
-              const tabIndex = index;
-              const pinnedUrl = pinnedUrls.get(tabIndex);
-              console.log('[Aura] restorePinnedUrl:', { tabIndex, pinnedUrl, tabExists: !!tab, linkedBrowser: !!tab.linkedBrowser });
-              if (pinnedUrl) {
-                if (tab.linkedBrowser) {
-                  const browser = tab.linkedBrowser;
-                  gBrowser.selectedTab = tab;
-                  browser.loadURI(pinnedUrl);
-                }
-              } else {
-                console.log('[Aura] No pinned URL found for index:', tabIndex);
-                console.log('[Aura] Available pinned URLs:', [...pinnedUrls.entries()]);
-              }
-            } else {
-              console.log('[Aura] Tab not found for index:', index);
-            }
-          } catch (e) {
-            console.error('[Aura] Restore pinned URL error:', e);
-          }
-          break;
         case 'repinUrl':
           try {
-            if (tab) {
-              const tabIndex = index;
-              const currentUrl = tab.linkedBrowser?.currentURI?.spec || '';
-              if (currentUrl) {
-                pinnedUrls.set(tabIndex, currentUrl);
-                syncTabs();
+            const targetTab = gBrowser.tabs.find(t => 'tab-' + gBrowser.tabs.indexOf(t) === tabId);
+            if (!targetTab) {
+              const idx = parseInt(tabId?.replace('tab-', ''));
+              if (idx >= 0 && idx < gBrowser.tabs.length) {
+                const actualTab = gBrowser.tabs[idx];
+                if (actualTab?.pinned) {
+                  if (action === 'restorePinnedUrl') {
+                    const pinnedUrl = pinnedUrls.get(idx);
+                    if (pinnedUrl && actualTab.linkedBrowser) {
+                      gBrowser.selectedTab = actualTab;
+                      actualTab.linkedBrowser.loadURI(pinnedUrl);
+                    }
+                  } else {
+                    const currentUrl = actualTab.linkedBrowser?.currentURI?.spec || '';
+                    if (currentUrl) {
+                      pinnedUrls.set(idx, currentUrl);
+                      syncTabs();
+                    }
+                  }
+                }
               }
             }
           } catch (e) {
-            console.error('[Aura] Re-pin URL error:', e);
+            console.error('[Aura] ' + action + ' error:', e);
           }
           break;
         case 'openExtensions':
