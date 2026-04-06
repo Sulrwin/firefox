@@ -306,6 +306,27 @@ body.dragging-tabs {
   box-shadow: 0 15px 40px rgba(0, 0, 0, 0.6), inset 0 0 40px rgba(255, 255, 255, 0.1), 0 0 20px rgba(255, 255, 255, 0.1);
 }
 
+.aura-bubble.url-changed {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), inset 0 0 20px rgba(255, 255, 255, 0.05), 0 0 0 3px rgba(255, 200, 0, 0.6);
+}
+
+.aura-bubble.url-changed:hover {
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), inset 0 0 30px rgba(255, 255, 255, 0.1), 0 0 0 3px rgba(255, 200, 0, 0.8);
+}
+
+.aura-bubble-indicator {
+  position: absolute;
+  bottom: -2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ffc107;
+  border: 2px solid rgba(30, 30, 30, 0.8);
+  z-index: 3;
+}
+
 .aura-bubble-icon {
   position: relative;
   z-index: 1;
@@ -683,4 +704,34 @@ body.dragging-tabs {
   text-align: center;
   color: rgba(255, 255, 255, 0.5);
   font-size: 13px;
+}
+
+.aura-context-menu {
+  position: fixed;
+  background: rgba(30, 30, 30, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 6px 0;
+  min-width: 180px;
+  z-index: 10000;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.aura-context-menu-item {
+  display: block;
+  width: 100%;
+  padding: 8px 16px;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+
+.aura-context-menu-item:hover {
+  background: rgba(255, 255, 255, 0.1);
 }

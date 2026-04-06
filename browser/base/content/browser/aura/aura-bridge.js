@@ -7,6 +7,8 @@
 
   window.addEventListener('load', initAuraBridge, { once: true });
 
+  const pinnedUrls = new Map();
+
   function initAuraBridge() {
     if (window.auraBridgeInitialized) return;
     window.auraBridgeInitialized = true;
@@ -83,11 +85,16 @@
           try {
             if (tab) {
               const pinned = data.pinned;
+              const tabIndex = index;
               if (pinned) {
                 if (gBrowser.pinTab) {
                   gBrowser.pinTab(tab);
                 } else if (tab.pinned !== undefined) {
                   tab.pinned = true;
+                }
+                const currentUrl = tab.linkedBrowser?.currentURI?.spec || '';
+                if (currentUrl && currentUrl !== 'about:blank') {
+                  pinnedUrls.set(tabIndex, currentUrl);
                 }
               } else {
                 if (gBrowser.unpinTab) {
@@ -95,10 +102,44 @@
                 } else if (tab.pinned !== undefined) {
                   tab.pinned = false;
                 }
+                pinnedUrls.delete(tabIndex);
               }
             }
           } catch (e) {
             console.error('[Aura] Pin tab error:', e);
+          }
+          break;
+        case 'restorePinnedUrl':
+          try {
+            if (tab) {
+              const tabIndex = index;
+              const pinnedUrl = pinnedUrls.get(tabIndex);
+              if (pinnedUrl) {
+                if (gBrowser.selectedTab !== tab) {
+                  gBrowser.selectedTab = tab;
+                }
+                openWebLinkIn(pinnedUrl, 'current', {
+                  triggerBrowser: tab.linkedBrowser,
+                  initiatingWindow: window
+                });
+              }
+            }
+          } catch (e) {
+            console.error('[Aura] Restore pinned URL error:', e);
+          }
+          break;
+        case 'repinUrl':
+          try {
+            if (tab) {
+              const tabIndex = index;
+              const currentUrl = tab.linkedBrowser?.currentURI?.spec || '';
+              if (currentUrl) {
+                pinnedUrls.set(tabIndex, currentUrl);
+                syncTabs();
+              }
+            }
+          } catch (e) {
+            console.error('[Aura] Re-pin URL error:', e);
           }
           break;
         case 'openExtensions':
@@ -151,6 +192,8 @@
           const favicon = tab.image || null;
           const tabId = 'tab-' + i;
           const isPinned = tab.pinned || false;
+          const pinnedUrl = pinnedUrls.get(i) || null;
+          const urlChanged = isPinned && pinnedUrl && url !== pinnedUrl && url !== 'about:blank';
           
           tabs.push({
             id: tabId,
@@ -158,6 +201,8 @@
             url: url,
             favicon: favicon,
             pinned: isPinned,
+            pinnedUrl: pinnedUrl,
+            urlChanged: urlChanged,
             loading: tab.getAttribute('busy') === 'true',
             active: tab.selected
           });
