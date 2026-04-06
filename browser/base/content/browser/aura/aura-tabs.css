@@ -109,7 +109,7 @@ body.dragging-tabs {
   height: 20px;
   border-radius: 0 0 12px 12px;
   background: rgba(30, 30, 30, 0.7);
-  border: none;
+  border: 1px solid rgba(255, 255, 255, 0.2);
   cursor: pointer;
   transition: opacity 300ms ease, height 200ms ease, width 200ms ease, background 200ms ease;
   z-index: 2000;
@@ -123,6 +123,7 @@ body.dragging-tabs {
   opacity: 0.8 !important;
   pointer-events: auto;
   background: rgba(30, 30, 30, 0.85);
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
 .aura-trigger.near {
@@ -131,6 +132,7 @@ body.dragging-tabs {
   width: 100px;
   pointer-events: auto;
   background: rgba(30, 30, 30, 0.85);
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
 .aura-trigger-icon {
