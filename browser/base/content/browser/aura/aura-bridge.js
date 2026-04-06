@@ -215,14 +215,14 @@
           const isPinned = tab.pinned || false;
           
           if (isPinned && url && url !== 'about:blank') {
-            if (!pinnedUrls.has(i) || (pinnedUrls.get(i) && pinnedUrls.get(i) !== url)) {
+            if (!pinnedUrls.has(i)) {
               pinnedUrls.set(i, url);
               console.log('[Aura] Stored pinned URL:', { i, url, pinnedUrls: [...pinnedUrls.entries()] });
             }
           }
           
           const pinnedUrl = pinnedUrls.get(i) || null;
-          const urlChanged = isPinned && pinnedUrl && url !== pinnedUrl;
+          const urlChanged = isPinned && pinnedUrl && url !== pinnedUrl && !url.startsWith(pinnedUrl);
           
           tabs.push({
             id: tabId,
