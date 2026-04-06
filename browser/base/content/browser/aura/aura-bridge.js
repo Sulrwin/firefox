@@ -170,11 +170,7 @@
           if (currentUrl) {
             window.auraBubbleTabs.updateUrlBar(currentUrl);
           }
-        } else {
-          console.log('[Aura] auraBubbleTabs not ready, tabs:', tabs);
         }
-        
-        console.log('[Aura] Synced tabs:', tabs.length, tabs);
         
         window.dispatchEvent(new CustomEvent('aura-sync-tabs', { detail: { tabs } }));
       } catch (e) {

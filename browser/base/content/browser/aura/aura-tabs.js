@@ -207,16 +207,6 @@ class AuraBubbleTabs {
 
   setTabs(tabs) {
     console.log('[AuraTabs] setTabs called with:', tabs);
-    // Preserve pinned state from localStorage using stable tab IDs
-    tabs = tabs.map(tab => {
-      const match = tab.id.match(/^tab-(\d+)$/);
-      if (match) {
-        const storageKey = 'aura-tab-pinned-' + match[1];
-        const localPinned = localStorage.getItem(storageKey) === 'true';
-        return { ...tab, pinned: tab.pinned || localPinned };
-      }
-      return tab;
-    });
     this.tabs = tabs;
     console.log('[AuraTabs] rendering with tabs:', this.tabs);
     this.render();
@@ -249,7 +239,6 @@ class AuraBubbleTabs {
   }
 
   createBubbleElement(tab, index, isPinned, animate) {
-    console.log('[AuraTabs] createBubbleElement:', tab.title, 'favicon:', tab.favicon, 'isPinned:', isPinned);
     const bubble = document.createElement('div');
     bubble.className = 'aura-bubble';
     if (isPinned) bubble.classList.add('pinned');
