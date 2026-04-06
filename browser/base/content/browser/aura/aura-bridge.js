@@ -77,6 +77,9 @@
         case 'maximizePopup':
           window.dispatchEvent(new CustomEvent('aura-maximize-popup'));
           break;
+        case 'newTab':
+          gBrowser.selectedTab = gBrowser.addTrustedTab(url || 'about:newtab');
+          break;
         case 'goBack':
           if (gBrowser.selectedBrowser?.canGoBack) {
             gBrowser.selectedBrowser.goBack();
@@ -259,8 +262,32 @@
       }
     }, 200);
 
-    // Also listen to browser events
-    gBrowser.addEventListener('TabOpen', () => syncTabs());
+    // Intercept new tab creation and redirect to popup
+    const originalAddTrustedTab = gBrowser.addTrustedTab.bind(gBrowser);
+    gBrowser.addTrustedTab = function(url, options) {
+      if (url && !url.startsWith('about:')) {
+        window.dispatchEvent(new CustomEvent('aura-show-popup', { detail: { url } }));
+        return gBrowser.selectedTab;
+      }
+      return originalAddTrustedTab(url, options);
+    };
+    
+    // Also intercept TabOpen to catch any new tabs
+    gBrowser.addEventListener('TabOpen', (e) => {
+      const tab = e.target;
+      if (tab?.linkedBrowser?.currentURI?.spec) {
+        const url = tab.linkedBrowser.currentURI.spec;
+        if (!url.startsWith('about:')) {
+          setTimeout(() => {
+            if (tab && tab.parentNode) {
+              gBrowser.removeTab(tab);
+            }
+          }, 50);
+          window.dispatchEvent(new CustomEvent('aura-show-popup', { detail: { url } }));
+        }
+      }
+      syncTabs();
+    });
     gBrowser.addEventListener('TabClose', () => syncTabs());
     gBrowser.addEventListener('TabSelect', () => syncTabs());
     
