@@ -336,16 +336,7 @@ class AuraBubbleTabs {
         }
         
         const tabId = bubble.dataset.tabId;
-        const tab = this.tabs.find(t => t.id === tabId);
-        
-        if (tab?.pinned && tab?.urlChanged && tab?.url) {
-          e.stopPropagation();
-          if (window.handleAuraAction) {
-            window.handleAuraAction({ action: 'navigateInPopup', url: tab.url });
-          }
-        } else {
-          this.selectTab(tabId);
-        }
+        this.selectTab(tabId);
       });
 
       bubble.addEventListener('mousedown', (e) => {
