@@ -139,9 +139,11 @@
           if (tab.linkedBrowser) {
             url = tab.linkedBrowser.currentURI?.spec || '';
             try {
-              const doc = tab.linkedBrowser.contentDocument;
-              if (doc?.title) {
-                title = doc.title;
+              if (tab.linkedBrowser.contentDocument && tab.linkedBrowser.contentDocument?.readyState === 'complete') {
+                const docTitle = tab.linkedBrowser.contentDocument.title;
+                if (docTitle && docTitle !== 'about:blank') {
+                  title = docTitle;
+                }
               }
             } catch (e) {}
           }
