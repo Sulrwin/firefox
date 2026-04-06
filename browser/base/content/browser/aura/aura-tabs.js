@@ -206,6 +206,16 @@ class AuraBubbleTabs {
   }
 
   setTabs(tabs) {
+    // Preserve pinned state from localStorage using stable tab IDs
+    tabs = tabs.map(tab => {
+      const match = tab.id.match(/^tab-(\d+)$/);
+      if (match) {
+        const storageKey = 'aura-tab-pinned-' + match[1];
+        const localPinned = localStorage.getItem(storageKey) === 'true';
+        return { ...tab, pinned: tab.pinned || localPinned };
+      }
+      return tab;
+    });
     this.tabs = tabs;
     this.render();
   }

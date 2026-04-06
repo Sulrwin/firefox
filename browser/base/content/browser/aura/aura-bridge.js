@@ -80,8 +80,17 @@
           }
           break;
         case 'pinTab':
-          if (tab && tab.togglePinned) {
-            tab.togglePinned();
+          if (tab) {
+            const pinned = data.pinned;
+            const tabBrowserId = tab.linkedBrowser?.outerWindowID || tab._tPos;
+            const storageKey = 'aura-tab-pinned-' + tabBrowserId;
+            if (pinned) {
+              localStorage.setItem(storageKey, 'true');
+              gBrowser.pinTab(tab);
+            } else {
+              localStorage.removeItem(storageKey);
+              gBrowser.unpinTab(tab);
+            }
           }
           break;
         case 'openExtensions':
@@ -129,12 +138,20 @@
           }
           
           const favicon = tab.image || null;
+          // Use a stable tab ID based on the tab's position or browser ID
+          const tabBrowserId = tab.linkedBrowser?.outerWindowID || tab._tPos || i;
+          const tabId = 'tab-' + tabBrowserId;
+          // Check localStorage for pinned state
+          const storageKey = 'aura-tab-pinned-' + tabBrowserId;
+          const localPinned = localStorage.getItem(storageKey) === 'true';
+          const isPinned = tab.pinned || localPinned;
+          
           tabs.push({
-            id: 'tab-' + i,
+            id: tabId,
             title: title,
             url: url,
             favicon: favicon,
-            pinned: tab.pinned || false,
+            pinned: isPinned,
             loading: tab.getAttribute('busy') === 'true',
             active: tab.selected
           });
