@@ -284,6 +284,22 @@ class AuraBubbleTabs {
   }
 
   bindBubbleEvents() {
+    // Remove old listeners to prevent duplicates
+    if (this._boundDragMove) {
+      document.removeEventListener('mousemove', this._boundDragMove);
+      document.removeEventListener('mouseup', this._boundDragEnd);
+      document.removeEventListener('touchmove', this._boundTouchMove);
+      document.removeEventListener('touchend', this._boundDragEnd);
+    }
+    
+    // Store bound functions for cleanup
+    this._boundDragMove = (e) => this._onDragMove(e);
+    this._boundDragEnd = (e) => this._onDragEnd(e);
+    this._boundTouchMove = (e) => {
+      const touch = e.touches[0];
+      this._onDragMove(touch);
+    };
+    
     const bubbles = this.elements.container.querySelectorAll('.aura-bubble:not(.aura-bubble-add)');
     
     bubbles.forEach(bubble => {
@@ -313,13 +329,11 @@ class AuraBubbleTabs {
       }, { passive: true });
     });
 
-    document.addEventListener('mousemove', (e) => this._onDragMove(e));
-    document.addEventListener('mouseup', (e) => this._onDragEnd(e));
-    document.addEventListener('touchmove', (e) => {
-      const touch = e.touches[0];
-      this._onDragMove(touch);
-    }, { passive: true });
-    document.addEventListener('touchend', (e) => this._onDragEnd(e));
+    // Add document-level drag listeners only once
+    document.addEventListener('mousemove', this._boundDragMove);
+    document.addEventListener('mouseup', this._boundDragEnd);
+    document.addEventListener('touchmove', this._boundTouchMove, { passive: true });
+    document.addEventListener('touchend', this._boundDragEnd);
   }
 
   _startDrag(e, bubble) {
