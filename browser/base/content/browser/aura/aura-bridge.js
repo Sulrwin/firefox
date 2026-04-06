@@ -141,10 +141,14 @@
           }
           
           const favicon = tab.image || null;
-          const tabBrowserId = tab.linkedBrowser?.outerWindowID;
           const tabId = 'tab-' + i;
-          const storageKey = tabBrowserId ? 'aura-tab-pinned-' + tabBrowserId : 'aura-tab-pinned-' + i;
-          const localPinned = localStorage.getItem(storageKey) === 'true';
+          let localPinned = false;
+          try {
+            const tabBrowserId = tab.linkedBrowser?.outerWindowID;
+            const storageKey = 'aura-tab-pinned-' + (tabBrowserId || i);
+            localPinned = localStorage.getItem(storageKey) === 'true';
+          } catch (e) {}
+          const isPinned = tab.pinned || localPinned;
           const isPinned = tab.pinned || localPinned;
           
           tabs.push({
