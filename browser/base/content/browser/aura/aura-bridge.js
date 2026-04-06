@@ -132,9 +132,18 @@
           const tab = gBrowser.tabs[i];
           let url = '';
           let title = tab.label || 'New Tab';
+          if (!title || title === 'about:blank') {
+            title = 'New Tab';
+          }
           
           if (tab.linkedBrowser) {
             url = tab.linkedBrowser.currentURI?.spec || '';
+            try {
+              const doc = tab.linkedBrowser.contentDocument;
+              if (doc?.title) {
+                title = doc.title;
+              }
+            } catch (e) {}
           }
           
           const favicon = tab.image || null;
