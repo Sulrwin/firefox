@@ -26,12 +26,10 @@ body.dragging-tabs {
 /* === Back Button === */
 .aura-back {
   position: fixed;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
+  left: 12px;
+  top: calc(50% - 18px);
   width: 36px;
   height: 36px;
-  margin-left: 12px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.15);
   border: 1px solid rgba(255, 255, 255, 0.2);
@@ -41,6 +39,8 @@ body.dragging-tabs {
   align-items: center;
   justify-content: center;
   font-size: 18px;
+  line-height: 36px;
+  text-align: center;
   opacity: 0;
   pointer-events: none;
   z-index: 1000;
@@ -49,7 +49,7 @@ body.dragging-tabs {
 
 .aura-back:hover {
   opacity: 0.9 !important;
-  transform: translateY(-50%) scale(1.1);
+  transform: scale(1.1);
   background: rgba(255, 255, 255, 0.25);
 }
 
@@ -61,12 +61,10 @@ body.dragging-tabs {
 /* === Forward Button === */
 .aura-forward {
   position: fixed;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
+  right: 12px;
+  top: calc(50% - 18px);
   width: 36px;
   height: 36px;
-  margin-right: 12px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.15);
   border: 1px solid rgba(255, 255, 255, 0.2);
@@ -76,6 +74,8 @@ body.dragging-tabs {
   align-items: center;
   justify-content: center;
   font-size: 18px;
+  line-height: 36px;
+  text-align: center;
   opacity: 0;
   pointer-events: none;
   z-index: 1000;
@@ -84,7 +84,7 @@ body.dragging-tabs {
 
 .aura-forward:hover {
   opacity: 0.9 !important;
-  transform: translateY(-50%) scale(1.1);
+  transform: scale(1.1);
   background: rgba(255, 255, 255, 0.25);
 }
 

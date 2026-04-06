@@ -125,22 +125,22 @@ class AuraBubbleTabs {
     this._handleMouseMove = (e) => {
       if (this.isExpanded) return;
       
-      const triggerZone = 60;
-      
       if (this.elements.trigger) {
         const rect = this.elements.trigger.getBoundingClientRect();
         const centerX = window.innerWidth / 2;
-        const isNear = e.clientX > centerX - triggerZone && e.clientX < centerX + triggerZone && e.clientY < 40;
-        this.elements.trigger.classList.toggle('near', isNear);
+        const triggerZone = 80;
+        const isNearX = e.clientX > centerX - triggerZone && e.clientX < centerX + triggerZone;
+        const isNearY = e.clientY < rect.bottom + 30;
+        this.elements.trigger.classList.toggle('near', isNearX && isNearY);
       }
 
       if (this.elements.back) {
-        const isNear = e.clientX < 60;
+        const isNear = e.clientX < 60 && e.clientY > 100;
         this.elements.back.classList.toggle('near', isNear);
       }
 
       if (this.elements.forward) {
-        const isNear = e.clientX > window.innerWidth - 60;
+        const isNear = e.clientX > window.innerWidth - 60 && e.clientY > 100;
         this.elements.forward.classList.toggle('near', isNear);
       }
     };
