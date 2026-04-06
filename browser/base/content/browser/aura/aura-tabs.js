@@ -206,9 +206,7 @@ class AuraBubbleTabs {
 
   setTabs(tabs) {
     this.tabs = tabs;
-    if (this.isExpanded) {
-      this.render();
-    }
+    this.render();
   }
 
   updateUrlBar(url) {

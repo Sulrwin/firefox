@@ -92,6 +92,7 @@
       try {
         const tabs = [];
         let currentUrl = '';
+        let currentFavicon = null;
         for (let i = 0; i < gBrowser.tabs.length; i++) {
           const tab = gBrowser.tabs[i];
           let url = '';
@@ -101,17 +102,19 @@
             url = tab.linkedBrowser.currentURI?.spec || '';
           }
           
+          const favicon = tab.image || null;
           tabs.push({
             id: 'tab-' + i,
             title: title,
             url: url,
-            favicon: tab.image || null,
+            favicon: favicon,
             pinned: tab.pinned || false,
             loading: tab.getAttribute('busy') === 'true',
             active: tab.selected
           });
           if (tab.selected) {
             currentUrl = url;
+            currentFavicon = favicon;
           }
         }
         
