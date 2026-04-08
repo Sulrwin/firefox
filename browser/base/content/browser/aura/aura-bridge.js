@@ -266,7 +266,7 @@
           }
           
           const pinnedUrl = pinnedUrls.get(i) || null;
-          const urlChanged = isPinned && pinnedUrl && url !== pinnedUrl && !url.startsWith(pinnedUrl);
+          const urlChanged = isPinned && pinnedUrl && url !== pinnedUrl;
           
           tabs.push({
             id: tabId,
