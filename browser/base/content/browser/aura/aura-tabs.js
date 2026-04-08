@@ -42,6 +42,7 @@ class AuraBubbleTabs {
     this.elements.refresh = document.getElementById('aura-refresh');
     this.elements.extensions = document.getElementById('aura-extensions');
     this.elements.settings = document.getElementById('aura-settings');
+    this.elements.downloads = document.getElementById('aura-downloads');
     this.elements.trigger = document.getElementById('aura-trigger');
     this.elements.container = document.getElementById('aura-bubbles');
     this.elements.urlBar = document.getElementById('aura-url-bar');
@@ -51,6 +52,9 @@ class AuraBubbleTabs {
     this.elements.addButton = document.getElementById('aura-add-tab');
     this.elements.newTabBar = document.getElementById('aura-new-tab-bar');
     this.elements.newTabInput = document.getElementById('aura-new-tab-input');
+    this.elements.downloadsPanel = document.getElementById('aura-downloads-panel');
+    this.elements.downloadsList = document.getElementById('aura-downloads-list');
+    this.elements.downloadsClose = document.getElementById('aura-downloads-close');
   }
 
   bindEvents() {
@@ -172,8 +176,27 @@ class AuraBubbleTabs {
         const isNear = e.clientX > window.innerWidth - 60 && e.clientY > 100;
         this.elements.forward.classList.toggle('near', isNear);
       }
+
+      if (this.elements.downloads) {
+        const isNear = e.clientX < 100 && e.clientY > window.innerHeight - 100;
+        this.elements.downloads.classList.toggle('near', isNear);
+      }
     };
     document.addEventListener('mousemove', this._handleMouseMove);
+
+    if (this.elements.downloads) {
+      this.elements.downloads.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.toggleDownloadsPanel();
+      });
+    }
+
+    if (this.elements.downloadsClose) {
+      this.elements.downloadsClose.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.hideDownloadsPanel();
+      });
+    }
   }
 
   expand() {
@@ -631,6 +654,118 @@ class AuraBubbleTabs {
   hideNewTabBar() {
     this.elements.newTabBar.classList.remove('visible');
     this.elements.newTabInput.value = '';
+  }
+
+  toggleDownloadsPanel() {
+    const panel = this.elements.downloadsPanel;
+    if (panel.classList.contains('visible')) {
+      this.hideDownloadsPanel();
+    } else {
+      this.showDownloadsPanel();
+    }
+  }
+
+  showDownloadsPanel() {
+    this.elements.downloadsPanel.classList.add('visible');
+    this.elements.downloads.classList.add('active');
+    this.collapse();
+    this.loadDownloads();
+  }
+
+  hideDownloadsPanel() {
+    this.elements.downloadsPanel.classList.remove('visible');
+    this.elements.downloads.classList.remove('active');
+  }
+
+  async loadDownloads() {
+    if (!this.elements.downloadsList) return;
+    
+    this.elements.downloadsList.innerHTML = '<div class="aura-download-empty">Loading downloads...</div>';
+    
+    try {
+      const { Downloads } = ChromeUtils.importESModule('resource://gre/modules/Downloads.sys.mjs');
+      const list = await Downloads.getList(Downloads.PUBLIC);
+      const downloads = await list.getAll();
+      
+      if (downloads.length === 0) {
+        this.elements.downloadsList.innerHTML = '<div class="aura-download-empty">No downloads yet</div>';
+        return;
+      }
+      
+      this.elements.downloadsList.innerHTML = '';
+      
+      const showCount = Math.min(downloads.length, 10);
+      for (let i = 0; i < showCount; i++) {
+        const download = downloads[i];
+        const item = this.createDownloadItem(download);
+        this.elements.downloadsList.appendChild(item);
+      }
+    } catch (e) {
+      console.error('[AuraTabs] Error loading downloads:', e);
+      this.elements.downloadsList.innerHTML = '<div class="aura-download-empty">Unable to load downloads</div>';
+    }
+  }
+
+  createDownloadItem(download) {
+    const item = document.createElement('div');
+    item.className = 'aura-download-item';
+    
+    const name = download.target?.path?.split('/').pop() || download.source?.url?.split('/').pop() || 'Unknown';
+    const state = download.state;
+    let statusText = '';
+    let progressHtml = '';
+    
+    if (state === 0 || state === 1) {
+      const progress = download.progress || 0;
+      statusText = `${Math.round(progress)}%`;
+      progressHtml = `<div class="aura-download-progress"><div class="aura-download-progress-bar" style="width: ${progress}%"></div></div>`;
+    } else if (state === 2) {
+      statusText = 'Complete';
+      item.querySelector('.aura-download-name')?.classList.add('aura-download-complete');
+    } else if (state === 3) {
+      statusText = 'Failed';
+    } else if (state === 4) {
+      statusText = 'Canceled';
+    }
+    
+    const size = download.totalBytes ? this.formatBytes(download.totalBytes) : '';
+    
+    item.innerHTML = `
+      <div class="aura-download-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+      </div>
+      <div class="aura-download-info">
+        <div class="aura-download-name">${this.escapeHtml(name)}</div>
+        <div class="aura-download-status">${statusText}${size ? ' • ' + size : ''}</div>
+        ${progressHtml}
+      </div>
+    `;
+    
+    item.addEventListener('click', () => {
+      if (download.state === 2 && download.target?.path) {
+        download.target?.open?.();
+      }
+    });
+    
+    return item;
+  }
+
+  formatBytes(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  }
+
+  escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
 
   getInitials(title) {
