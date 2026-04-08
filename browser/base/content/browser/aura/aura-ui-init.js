@@ -112,6 +112,18 @@
     extensionsPopup.appendChild(extensionsList);
     root.appendChild(extensionsPopup);
 
+    // Downloads button
+    const downloadsBtn = document.createElement('button');
+    downloadsBtn.id = 'aura-downloads';
+    downloadsBtn.className = 'aura-downloads';
+    downloadsBtn.setAttribute('aria-label', 'Downloads');
+    downloadsBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+      <polyline points="7 10 12 15 17 10"/>
+      <line x1="12" y1="15" x2="12" y2="3"/>
+    </svg>`;
+    root.appendChild(downloadsBtn);
+
     // Downloads panel
     const downloadsPanel = document.createElement('div');
     downloadsPanel.id = 'aura-downloads-panel';
