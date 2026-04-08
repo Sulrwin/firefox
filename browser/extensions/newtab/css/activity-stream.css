@@ -809,13 +809,13 @@ main section {
 }
 .logo-and-wordmark .wordmark {
   background: url("chrome://branding/content/aura-wordmark.svg") no-repeat center center;
-  background-size: 200px;
+  background-size: contain;
   -moz-context-properties: fill;
   display: inline-block;
   fill: var(--newtab-wordmark-color);
   height: 64px;
   margin-inline-start: var(--space-large);
-  width: 200px;
+  width: 240px;
 }
 .lightWallpaper .logo-and-wordmark .wordmark {
   color-scheme: light;

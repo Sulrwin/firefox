@@ -1,23 +1,22 @@
-<!-- Protocol Aura Wordmark -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 450 80">
-  <!-- P -->
-  <path fill="#20123a" d="M20 15v50h22V45h20c10 0 17-7 17-17s-7-17-17-17H20v4h2c5 0 8 3 8 8s-3 8-8 8h-2V15z"/>
-  <!-- r -->
-  <path fill="#20123a" d="M80 30h12l-6 18h-6v17H70V30z"/>
-  <!-- o -->
-  <path fill="#20123a" d="M108 35c0-12 10-22 22-22s22 10 22 22-10 22-22 22-22-10-22-22zm30 0c0-4-3-8-8-8s-8 4-8 8 3 8 8 8 8-4 8-8z"/>
-  <!-- t -->
-  <path fill="#20123a" d="M175 28v5h-12v22h-10V33h-12v-5h34z"/>
-  <!-- o -->
-  <path fill="#20123a" d="M200 35c0-12 10-22 22-22s22 10 22 22-10 22-22 22-22-10-22-22zm30 0c0-4-3-8-8-8s-8 4-8 8 3 8 8 8 8-4 8-8z"/>
-  <!-- c -->
-  <path fill="#20123a" d="M265 28c0-4 3-7 7-7h17v5h-11c-3 0-6 3-6 6s3 6 6 6h11v5h-17c-4 0-7-3-7-7s3-7 7-7h11v-1h-11z"/>
-  <!-- o -->
-  <path fill="#20123a" d="M295 35c0-12 10-22 22-22s22 10 22 22-10 22-22 22-22-10-22-22zm30 0c0-4-3-8-8-8s-8 4-8 8 3 8 8 8 8-4 8-8z"/>
-  <!-- l -->
-  <path fill="#20123a" d="M350 15v50h10V15h-10z"/>
-  <!-- A -->
-  <path fill="#20123a" d="M375 65V40l20-35 20 35v25h-15V42l-10-17-10 17v23h-5z"/>
-  <!-- u -->
-  <path fill="#20123a" d="M430 40v25h10V40c0-10 6-15 12-15v-7h-7v7c-6 0-15 5-15 15z"/>
+  <defs>
+    <linearGradient id="textGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#63b3ed"/>
+      <stop offset="100%" style="stop-color:#4fd1c5"/>
+    </linearGradient>
+    <filter id="shadow">
+      <feDropShadow dx="1" dy="2" stdDeviation="2" flood-color="#000" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+  <g filter="url(#shadow)">
+    <text x="225" y="55" 
+          font-family="Arial, Helvetica, sans-serif" 
+          font-weight="bold" 
+          font-size="48" 
+          text-anchor="middle" 
+          letter-spacing="3"
+          fill="url(#textGrad)">
+      PROTOCOL AURA
+    </text>
+  </g>
 </svg>
