@@ -374,9 +374,14 @@ class AuraBubbleTabs {
     const restoreItem = document.createElement('button');
     restoreItem.className = 'aura-context-menu-item';
     restoreItem.textContent = 'Restore to pinned URL';
-    restoreItem.addEventListener('click', () => {
+    restoreItem.addEventListener('click', (e) => {
+      console.log('[AuraTabs] Restore clicked, tabId:', tabId);
+      e.stopPropagation();
       if (window.handleAuraAction) {
+        console.log('[AuraTabs] Calling handleAuraAction');
         window.handleAuraAction({ action: 'restorePinnedUrl', tabId });
+      } else {
+        console.log('[AuraTabs] handleAuraAction not found');
       }
       menu.remove();
       this._currentContextMenu = null;
@@ -385,9 +390,14 @@ class AuraBubbleTabs {
     const repinItem = document.createElement('button');
     repinItem.className = 'aura-context-menu-item';
     repinItem.textContent = 'Re-pin current URL';
-    repinItem.addEventListener('click', () => {
+    repinItem.addEventListener('click', (e) => {
+      console.log('[AuraTabs] Repin clicked, tabId:', tabId);
+      e.stopPropagation();
       if (window.handleAuraAction) {
+        console.log('[AuraTabs] Calling handleAuraAction');
         window.handleAuraAction({ action: 'repinUrl', tabId });
+      } else {
+        console.log('[AuraTabs] handleAuraAction not found');
       }
       menu.remove();
       this._currentContextMenu = null;
@@ -403,8 +413,8 @@ class AuraBubbleTabs {
     this._currentContextMenu = menu;
     
     const closeHandler = (e) => {
-      if (e.button !== 0 && !menu.contains(e.target)) return;
-      if (e.target.id === 'aura-pinned-context') return;
+      if (e.button !== 0) return;
+      if (menu.contains(e.target)) return;
       menu.remove();
       this._currentContextMenu = null;
       document.removeEventListener('mousedown', closeHandler);
