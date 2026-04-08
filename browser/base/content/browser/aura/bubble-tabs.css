@@ -773,38 +773,42 @@ body.dragging-tabs {
 /* === Downloads Button === */
 .aura-downloads {
   position: fixed;
-  left: 12px;
+  left: 0;
   bottom: 12px;
+  margin-left: 12px;
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.08);
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.2) 0%,
+    rgba(255, 255, 255, 0.05) 100%
+  );
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(255, 255, 255, 0.7);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0.5;
-  z-index: 1001;
-  pointer-events: auto;
-  transition: opacity 200ms ease, transform 200ms ease, background 200ms ease;
+  opacity: 0;
+  z-index: 1000;
+  transition: opacity 400ms ease, transform 300ms ease;
+  pointer-events: none;
+}
+
+.aura-downloads:hover {
+  opacity: 0.9 !important;
+  transform: scale(1.1);
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.3) 0%,
+    rgba(255, 255, 255, 0.1) 100%
+  );
 }
 
 .aura-downloads.near {
-  opacity: 0.8;
-}
-
-.aura-downloads.visible,
-.aura-downloads:hover {
-  opacity: 0.9;
-  background: rgba(255, 255, 255, 0.15);
-}
-
-.aura-downloads:hover {
-  transform: scale(1.1);
+  opacity: 0.5;
+  pointer-events: auto;
 }
 
 .aura-downloads.active {
