@@ -670,12 +670,22 @@ class AuraBubbleTabs {
     this.elements.downloads.classList.add('active');
     this.collapse();
     this.loadDownloads();
+    document.addEventListener('click', this._closeDownloadsOutside);
   }
 
   hideDownloadsPanel() {
     this.elements.downloadsPanel.classList.remove('visible');
     this.elements.downloads.classList.remove('active');
+    document.removeEventListener('click', this._closeDownloadsOutside);
   }
+
+  _closeDownloadsOutside = (e) => {
+    if (this.elements.downloadsPanel.classList.contains('visible') &&
+        !this.elements.downloadsPanel.contains(e.target) &&
+        e.target !== this.elements.downloads) {
+      this.hideDownloadsPanel();
+    }
+  };
 
   async loadDownloads() {
     if (!this.elements.downloadsList) return;
@@ -684,7 +694,7 @@ class AuraBubbleTabs {
     
     try {
       const { Downloads } = ChromeUtils.importESModule('resource://gre/modules/Downloads.sys.mjs');
-      const list = await Downloads.getList(Downloads.PUBLIC);
+      const list = await Downloads.getList(Downloads.ALL);
       const downloads = await list.getAll();
       
       if (downloads.length === 0) {
@@ -711,6 +721,7 @@ class AuraBubbleTabs {
     item.className = 'aura-download-item';
     
     const name = download.target?.path?.split('/').pop() || download.source?.url?.split('/').pop() || 'Unknown';
+    const filePath = download.target?.path || '';
     const state = download.state;
     let statusText = '';
     let progressHtml = '';
@@ -721,9 +732,10 @@ class AuraBubbleTabs {
       progressHtml = `<div class="aura-download-progress"><div class="aura-download-progress-bar" style="width: ${progress}%"></div></div>`;
     } else if (state === 2) {
       statusText = 'Complete';
-      item.querySelector('.aura-download-name')?.classList.add('aura-download-complete');
+      item.classList.add('complete');
     } else if (state === 3) {
       statusText = 'Failed';
+      item.classList.add('failed');
     } else if (state === 4) {
       statusText = 'Canceled';
     }
@@ -743,11 +755,50 @@ class AuraBubbleTabs {
         <div class="aura-download-status">${statusText}${size ? ' • ' + size : ''}</div>
         ${progressHtml}
       </div>
+      <div class="aura-download-actions">
+        <button class="aura-download-action aura-download-show-folder" title="Show in folder" ${!filePath ? 'style="display:none"' : ''}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
+          </svg>
+        </button>
+        <button class="aura-download-action aura-download-remove" title="Remove from history">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+          </svg>
+        </button>
+      </div>
     `;
     
+    const showFolderBtn = item.querySelector('.aura-download-show-folder');
+    const removeBtn = item.querySelector('.aura-download-remove');
+    
+    showFolderBtn?.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (filePath) {
+        const { FileUtils } = ChromeUtils.importESModule('resource://gre/modules/FileUtils.sys.mjs');
+        const file = FileUtils.File(filePath);
+        file.reveal();
+      }
+    });
+    
+    removeBtn?.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      try {
+        const { Downloads } = ChromeUtils.importESModule('resource://gre/modules/Downloads.sys.mjs');
+        const list = await Downloads.getList(Downloads.PUBLIC);
+        await list.remove(download);
+        this.loadDownloads();
+      } catch (err) {
+        console.error('[AuraTabs] Error removing download:', err);
+      }
+    });
+    
     item.addEventListener('click', () => {
-      if (download.state === 2 && download.target?.path) {
-        download.target?.open?.();
+      if (download.state === 2 && filePath) {
+        const { FileUtils } = ChromeUtils.importESModule('resource://gre/modules/FileUtils.sys.mjs');
+        const file = FileUtils.File(filePath);
+        file.open();
       }
     });
     

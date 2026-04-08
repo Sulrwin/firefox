@@ -977,6 +977,48 @@ body.dragging-tabs {
   color: #fc8181;
 }
 
+.aura-download-item.complete .aura-download-name {
+  color: #68d391;
+}
+
+.aura-download-item.failed .aura-download-name {
+  color: #fc8181;
+}
+
+.aura-download-actions {
+  display: flex;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+
+.aura-download-item:hover .aura-download-actions {
+  opacity: 1;
+}
+
+.aura-download-action {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.aura-download-action:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.aura-download-action:active {
+  transform: scale(0.95);
+}
+
 .aura-download-empty {
   padding: 40px 20px;
   text-align: center;
