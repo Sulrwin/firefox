@@ -787,21 +787,19 @@ body.dragging-tabs {
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0;
+  opacity: 0.5;
   z-index: 1001;
-  pointer-events: none;
-  transition: opacity 400ms ease, transform 200ms ease, background 200ms ease;
+  pointer-events: auto;
+  transition: opacity 200ms ease, transform 200ms ease, background 200ms ease;
 }
 
 .aura-downloads.near {
-  opacity: 0.5;
-  pointer-events: auto;
+  opacity: 0.8;
 }
 
 .aura-downloads.visible,
 .aura-downloads:hover {
   opacity: 0.9;
-  pointer-events: auto;
   background: rgba(255, 255, 255, 0.15);
 }
 

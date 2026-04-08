@@ -180,9 +180,6 @@ class AuraBubbleTabs {
       if (this.elements.downloads) {
         const isNear = e.clientX < 150 && e.clientY > window.innerHeight - 150;
         this.elements.downloads.classList.toggle('near', isNear);
-        if (isNear) {
-          console.log('[AuraTabs] Downloads near!', e.clientX, e.clientY);
-        }
       }
     };
     document.addEventListener('mousemove', this._handleMouseMove);
