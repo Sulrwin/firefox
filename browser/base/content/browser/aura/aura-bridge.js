@@ -166,11 +166,25 @@
                   console.log('[Aura] Restore URL:', { idx, pinnedUrl, currentUrl: actualTab.linkedBrowser?.currentURI?.spec });
                   if (pinnedUrl && actualTab.linkedBrowser) {
                     gBrowser.selectedTab = actualTab;
-                    const principal = Services.scriptSecurityManager.getSystemPrincipal();
-                    gBrowser.loadURI(pinnedUrl, {
-                      triggeringPrincipal: principal,
-                      targetBrowser: actualTab.linkedBrowser
-                    });
+                    try {
+                      openWebLinkIn(pinnedUrl, 'current', {
+                        triggerBrowser: actualTab.linkedBrowser,
+                        initiatingWindow: window
+                      });
+                    } catch (e2) {
+                      try {
+                        actualTab.linkedBrowser.loadURI(pinnedUrl);
+                      } catch (e3) {
+                        const principal = Services.scriptSecurityManager.getSystemPrincipal();
+                        gBrowser.loadURI(pinnedUrl, {
+                          triggeringPrincipal: principal,
+                          targetBrowser: actualTab.linkedBrowser
+                        });
+                      }
+                    }
+                    setTimeout(syncTabs, 100);
+                    setTimeout(syncTabs, 500);
+                    setTimeout(syncTabs, 1500);
                   } else {
                     console.log('[Aura] No pinned URL found for idx:', idx, 'pinnedUrls:', [...pinnedUrls.entries()]);
                   }
