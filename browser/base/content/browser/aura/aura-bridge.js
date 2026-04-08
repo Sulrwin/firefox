@@ -8,28 +8,32 @@
   window.addEventListener('load', initAuraBridge, { once: true });
 
   const pinnedUrls = new Map();
+  const PREFS_BRANCH = 'browser.aura.pinnedUrls.';
 
   function savePinnedUrls() {
     try {
       const data = JSON.stringify([...pinnedUrls.entries()]);
-      if (typeof SessionStore !== 'undefined') {
-        SessionStore.setGlobalValue('auraPinnedUrls', data);
-      }
-    } catch (e) {}
+      Services.prefs.setStringPref(PREFS_BRANCH + 'data', data);
+    } catch (e) {
+      console.error('[Aura] savePinnedUrls error:', e);
+    }
   }
 
   function loadPinnedUrls() {
     try {
-      if (typeof SessionStore !== 'undefined') {
-        const data = SessionStore.getGlobalValue('auraPinnedUrls');
+      if (Services.prefs.prefHasUserValue(PREFS_BRANCH + 'data')) {
+        const data = Services.prefs.getStringPref(PREFS_BRANCH + 'data');
         if (data) {
           const entries = JSON.parse(data);
           entries.forEach(([key, value]) => {
             pinnedUrls.set(parseInt(key), value);
           });
+          console.log('[Aura] Loaded pinned URLs:', [...pinnedUrls.entries()]);
         }
       }
-    } catch (e) {}
+    } catch (e) {
+      console.error('[Aura] loadPinnedUrls error:', e);
+    }
   }
 
   function initAuraBridge() {
