@@ -694,8 +694,11 @@ class AuraBubbleTabs {
     
     try {
       const { Downloads } = ChromeUtils.importESModule('resource://gre/modules/Downloads.sys.mjs');
+      console.log('[AuraTabs] Downloads module:', Downloads);
       const list = await Downloads.getList(Downloads.ALL);
+      console.log('[AuraTabs] Download list:', list);
       const downloads = await list.getAll();
+      console.log('[AuraTabs] All downloads:', downloads.length, downloads);
       
       if (downloads.length === 0) {
         this.elements.downloadsList.innerHTML = '<div class="aura-download-empty">No downloads yet</div>';

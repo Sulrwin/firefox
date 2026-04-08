@@ -987,9 +987,8 @@ body.dragging-tabs {
 
 .aura-download-actions {
   display: flex;
-  gap: 6px;
-  opacity: 0;
-  transition: opacity 150ms ease;
+  gap: 4px;
+  opacity: 1;
 }
 
 .aura-download-item:hover .aura-download-actions {
@@ -997,26 +996,35 @@ body.dragging-tabs {
 }
 
 .aura-download-action {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  border-radius: 4px;
   background: rgba(255, 255, 255, 0.1);
   border: none;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(255, 255, 255, 0.7);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: background 150ms ease, color 150ms ease;
+  padding: 0;
+  margin: 0;
 }
 
 .aura-download-action:hover {
-  background: rgba(255, 255, 255, 0.2);
-  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.25);
+  color: rgba(255, 255, 255, 1);
 }
 
 .aura-download-action:active {
   transform: scale(0.95);
+}
+
+.aura-download-action svg {
+  width: 12px;
+  height: 12px;
+  pointer-events: none;
 }
 
 .aura-download-empty {
