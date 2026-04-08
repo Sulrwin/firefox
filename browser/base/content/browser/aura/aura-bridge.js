@@ -9,11 +9,36 @@
 
   const pinnedUrls = new Map();
 
+  function savePinnedUrls() {
+    try {
+      const data = JSON.stringify([...pinnedUrls.entries()]);
+      if (typeof SessionStore !== 'undefined') {
+        SessionStore.setGlobalValue('auraPinnedUrls', data);
+      }
+    } catch (e) {}
+  }
+
+  function loadPinnedUrls() {
+    try {
+      if (typeof SessionStore !== 'undefined') {
+        const data = SessionStore.getGlobalValue('auraPinnedUrls');
+        if (data) {
+          const entries = JSON.parse(data);
+          entries.forEach(([key, value]) => {
+            pinnedUrls.set(parseInt(key), value);
+          });
+        }
+      }
+    } catch (e) {}
+  }
+
   function initAuraBridge() {
     if (window.auraBridgeInitialized) return;
     window.auraBridgeInitialized = true;
 
     if (!window.gBrowser) return;
+
+    loadPinnedUrls();
 
     window.addEventListener('message', function(e) {
       if (e.data && e.data.type === 'aura-action') {
@@ -128,24 +153,27 @@
         case 'restorePinnedUrl':
         case 'repinUrl':
           try {
-            const targetTab = gBrowser.tabs.find(t => 'tab-' + gBrowser.tabs.indexOf(t) === tabId);
-            if (!targetTab) {
-              const idx = parseInt(tabId?.replace('tab-', ''));
-              if (idx >= 0 && idx < gBrowser.tabs.length) {
-                const actualTab = gBrowser.tabs[idx];
-                if (actualTab?.pinned) {
-                  if (action === 'restorePinnedUrl') {
-                    const pinnedUrl = pinnedUrls.get(idx);
-                    if (pinnedUrl && actualTab.linkedBrowser) {
-                      gBrowser.selectedTab = actualTab;
+            const idx = parseInt(tabId?.replace('tab-', ''));
+            if (idx >= 0 && idx < gBrowser.tabs.length) {
+              const actualTab = gBrowser.tabs[idx];
+              if (actualTab?.pinned) {
+                if (action === 'restorePinnedUrl') {
+                  const pinnedUrl = pinnedUrls.get(idx);
+                  if (pinnedUrl && actualTab.linkedBrowser) {
+                    gBrowser.selectedTab = actualTab;
+                    try {
+                      const principal = Services.scriptSecurityManager.getSystemPrincipal();
+                      actualTab.linkedBrowser.loadURI(pinnedUrl, { triggeringPrincipal: principal });
+                    } catch (e) {
                       actualTab.linkedBrowser.loadURI(pinnedUrl);
                     }
-                  } else {
-                    const currentUrl = actualTab.linkedBrowser?.currentURI?.spec || '';
-                    if (currentUrl) {
-                      pinnedUrls.set(idx, currentUrl);
-                      syncTabs();
-                    }
+                  }
+                } else {
+                  const currentUrl = actualTab.linkedBrowser?.currentURI?.spec || '';
+                  if (currentUrl) {
+                    pinnedUrls.set(idx, currentUrl);
+                    savePinnedUrls();
+                    syncTabs();
                   }
                 }
               }
@@ -208,7 +236,8 @@
           if (isPinned && url && url !== 'about:blank') {
             if (!pinnedUrls.has(i)) {
               pinnedUrls.set(i, url);
-              console.log('[Aura] Stored pinned URL:', { i, url, pinnedUrls: [...pinnedUrls.entries()] });
+              savePinnedUrls();
+              console.log('[Aura] Stored pinned URL:', { i, url });
             }
           }
           
