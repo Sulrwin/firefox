@@ -53,6 +53,10 @@
       const pinned = data.pinned;
       const index = tabId ? parseInt(tabId.replace('tab-', '')) : -1;
       const tab = index >= 0 && index < gBrowser.tabs.length ? gBrowser.tabs[index] : null;
+      
+      if (action === 'restorePinnedUrl' || action === 'repinUrl') {
+        console.log('[Aura] Action received:', action, { tabId, index, tabExists: !!tab, pinnedUrls: [...pinnedUrls.entries()] });
+      }
 
       switch (action) {
         case 'selectTab':
