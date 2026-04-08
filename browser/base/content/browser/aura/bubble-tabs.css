@@ -811,6 +811,10 @@ body.dragging-tabs {
   pointer-events: auto;
 }
 
+.aura-downloads svg {
+  pointer-events: none;
+}
+
 .aura-downloads.active {
   opacity: 1;
   background: rgba(99, 179, 237, 0.3);
