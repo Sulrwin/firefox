@@ -1,0 +1,16 @@
+/* Protocol Aura - About:Home Customization */
+
+.logo-and-wordmark .logo {
+  background: image-set(url("chrome://branding/content/about-logo.svg") 1x) no-repeat center !important;
+  background-size: 64px !important;
+}
+
+.logo-and-wordmark .wordmark {
+  background: url("chrome://branding/content/aura-wordmark.svg") no-repeat center center !important;
+  background-size: 140px !important;
+  width: 140px !important;
+}
+
+.nova-enabled .logo-and-wordmark .wordmark {
+  display: inline-block !important;
+}

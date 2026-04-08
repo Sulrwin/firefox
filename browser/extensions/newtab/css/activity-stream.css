@@ -808,14 +808,14 @@ main section {
   background-size: 64px;
 }
 .logo-and-wordmark .wordmark {
-  background: url("chrome://branding/content/firefox-wordmark.svg") no-repeat center center;
-  background-size: 105px;
+  background: url("chrome://branding/content/aura-wordmark.svg") no-repeat center center;
+  background-size: 140px;
   -moz-context-properties: fill;
   display: inline-block;
   fill: var(--newtab-wordmark-color);
   height: 64px;
   margin-inline-start: var(--space-large);
-  width: 105px;
+  width: 140px;
 }
 .lightWallpaper .logo-and-wordmark .wordmark {
   color-scheme: light;
