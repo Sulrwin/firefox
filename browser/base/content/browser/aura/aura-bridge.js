@@ -159,6 +159,7 @@
               if (actualTab?.pinned) {
                 if (action === 'restorePinnedUrl') {
                   const pinnedUrl = pinnedUrls.get(idx);
+                  console.log('[Aura] Restore URL:', { idx, pinnedUrl, currentUrl: actualTab.linkedBrowser?.currentURI?.spec });
                   if (pinnedUrl && actualTab.linkedBrowser) {
                     gBrowser.selectedTab = actualTab;
                     try {
@@ -167,6 +168,8 @@
                     } catch (e) {
                       actualTab.linkedBrowser.loadURI(pinnedUrl);
                     }
+                  } else {
+                    console.log('[Aura] No pinned URL found for idx:', idx, 'pinnedUrls:', [...pinnedUrls.entries()]);
                   }
                 } else {
                   const currentUrl = actualTab.linkedBrowser?.currentURI?.spec || '';
