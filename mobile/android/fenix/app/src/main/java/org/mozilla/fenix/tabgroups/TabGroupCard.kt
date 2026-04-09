@@ -52,6 +52,7 @@ import org.mozilla.fenix.compose.TabThumbnail
 import org.mozilla.fenix.compose.TabThumbnailImageData
 import org.mozilla.fenix.tabstray.TabsTrayTestTag
 import org.mozilla.fenix.tabstray.TabsTrayTestTag.TAB_GROUP_TITLE
+import org.mozilla.fenix.tabstray.browser.compose.TabItemInteractionState
 import org.mozilla.fenix.tabstray.data.TabGroupTheme
 import org.mozilla.fenix.tabstray.data.TabsTrayItem
 import org.mozilla.fenix.tabstray.ui.tabitems.LOREM_IPSUM
@@ -66,6 +67,7 @@ import org.mozilla.fenix.tabstray.ui.tabitems.ThumbnailShape
 import org.mozilla.fenix.tabstray.ui.tabitems.gridItemAspectRatio
 import org.mozilla.fenix.tabstray.ui.tabitems.tabItemClickable
 import org.mozilla.fenix.tabstray.ui.tabitems.tabItemConditionalBorder
+import org.mozilla.fenix.tabstray.ui.tabitems.tabItemInteractionAnimation
 import org.mozilla.fenix.theme.FirefoxTheme
 
 const val TOP_START_THUMBNAIL_INDEX = 0
@@ -79,6 +81,8 @@ const val BOTTOM_END_THUMBNAIL_INDEX = 3
  * @param selectionState: The tab selection state.
  * @param clickHandler: Handler for all click-handling inputs (long click, click, etc)
  * @param modifier: The Modifier
+ * @param interactionState The tab item's interaction state (hover, drag, etc)
+ * @param onDeleteTabGroup Invoked when the user clicks on delete tab group.
  */
 @Composable
 fun TabGroupCard(
@@ -86,10 +90,13 @@ fun TabGroupCard(
     selectionState: TabsTrayItemSelectionState,
     clickHandler: TabsTrayItemClickHandler,
     modifier: Modifier = Modifier,
+    interactionState: TabItemInteractionState,
+    onDeleteTabGroup: (TabsTrayItem.TabGroup) -> Unit,
 ) {
     Box(
         modifier = modifier
             .wrapContentSize()
+            .tabItemInteractionAnimation(interactionState)
             .testTag(TabsTrayTestTag.TAB_ITEM_ROOT),
     ) {
         Card(
@@ -133,7 +140,10 @@ fun TabGroupCard(
 
                         Spacer(modifier = Modifier.width(FirefoxTheme.layout.space.static50))
 
-                        TabGroupOptionButton(selectionState = selectionState)
+                        TabGroupOptionButton(
+                            selectionState = selectionState,
+                            onDeleteTabGroup = { onDeleteTabGroup(group) },
+                        )
                     }
                 }
 
@@ -167,14 +177,21 @@ fun TabGroupCard(
  * Renders the button in the top-right corner of the TabGroupCard.
  */
 @Composable
-private fun TabGroupOptionButton(selectionState: TabsTrayItemSelectionState) {
+private fun TabGroupOptionButton(
+    selectionState: TabsTrayItemSelectionState,
+    onDeleteTabGroup: () -> Unit,
+) {
     if (selectionState.multiSelectEnabled) {
         MultiSelectTabButton(
             isSelected = selectionState.isSelected,
             uncheckedBorderColor = LocalContentColor.current,
         )
     } else {
-        TabGroupMenuButton(modifier = Modifier.size(TabHeaderIconTouchTargetSize), includeCloseOption = true)
+        TabGroupMenuButton(
+            modifier = Modifier.size(TabHeaderIconTouchTargetSize),
+            includeCloseOption = true,
+            onDeleteTabGroup = onDeleteTabGroup,
+        )
     }
 }
 
@@ -329,6 +346,7 @@ private data class TabGroupCardPreviewState(
             )
         }.toMutableList(),
     ),
+    val interactionState: TabItemInteractionState = TabItemInteractionState(),
 )
 
 private class TabGroupCardPreviewProvider : PreviewParameterProvider<TabGroupCardPreviewState> {
@@ -392,6 +410,19 @@ private class TabGroupCardPreviewProvider : PreviewParameterProvider<TabGroupCar
                         multiSelectEnabled = true,
                     ),
                 groupSize = 4,
+            ),
+        ),
+        Pair(
+            "Dragged",
+            TabGroupCardPreviewState(
+                selectionState =
+                    TabsTrayItemSelectionState(
+                        isFocused = false,
+                        isSelected = false,
+                        multiSelectEnabled = false,
+                    ),
+                groupSize = 4,
+                interactionState = TabItemInteractionState(isDragged = true),
             ),
         ),
     )
@@ -467,6 +498,7 @@ private fun TabGroupCardPreview(
                 ),
                 onCloseClick = {},
                 onClick = {},
+                interactionState = tabGroupCardState.interactionState,
             )
 
             TabGroupCard(
@@ -479,6 +511,8 @@ private fun TabGroupCardPreview(
                     onLongClick = { item: TabsTrayItem -> {} },
                 ),
                 modifier = Modifier.weight(1f),
+                interactionState = tabGroupCardState.interactionState,
+                onDeleteTabGroup = {},
             )
         }
     }

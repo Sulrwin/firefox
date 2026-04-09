@@ -5021,7 +5021,7 @@ struct Internals {
     NS_ENSURE_TRUE(Preferences::InitStaticMembers(), NS_ERROR_NOT_AVAILABLE);
 
     if (Maybe<PrefWrapper> pref = pref_Lookup(aPrefName)) {
-      rv = pref->GetValue(aKind, std::forward<T>(aResult));
+      rv = pref->GetValue(aKind, aResult);
 
       if (profiler_thread_is_being_profiled_for_markers()) {
         profiler_add_marker(
@@ -6500,7 +6500,6 @@ static const PrefListEntry sDynamicPrefOverrideList[]{
     PREF_LIST_ENTRY("media.peerconnection.nat_simulator.network_delay_ms"),
     PREF_LIST_ENTRY("media.video_loopback_dev"),
     PREF_LIST_ENTRY("media.webspeech.service.endpoint"),
-    PREF_LIST_ENTRY("network.gio.supported-protocols"),
     PREF_LIST_ENTRY("network.protocol-handler.external."),
     PREF_LIST_ENTRY("network.security.ports.banned"),
     PREF_LIST_ENTRY("nimbus.syncdatastore."),

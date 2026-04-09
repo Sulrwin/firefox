@@ -18,8 +18,6 @@ ChromeUtils.defineESModuleGetters(lazy, {
   openAIEngine: "moz-src:///browser/components/aiwindow/models/Utils.sys.mjs",
   DEFAULT_ENGINE_ID:
     "moz-src:///browser/components/aiwindow/models/Utils.sys.mjs",
-  SERVICE_TYPES: "moz-src:///browser/components/aiwindow/models/Utils.sys.mjs",
-  PURPOSES: "moz-src:///browser/components/aiwindow/models/Utils.sys.mjs",
   generateChatTitle:
     "moz-src:///browser/components/aiwindow/models/TitleGeneration.sys.mjs",
   AIWindow:
@@ -667,7 +665,7 @@ export class AIWindow extends MozLitElement {
     if (doc.hidden) {
       this.#visibilityChangeHandler = () => {
         if (!doc.hidden && !this.#smartbar) {
-          this.#getOrCreateSmartbar(doc, container);
+          this.#getOrCreateSmartbar(doc);
           this.loadStarterPrompts(false, selectedTab);
         }
       };
@@ -675,7 +673,7 @@ export class AIWindow extends MozLitElement {
         once: true,
       });
     } else {
-      this.#getOrCreateSmartbar(doc, container);
+      this.#getOrCreateSmartbar(doc);
     }
 
     await this.#loadPendingConversation().catch(error => {
@@ -750,7 +748,12 @@ export class AIWindow extends MozLitElement {
           this.#memoriesToggled ?? this.#memoriesIconShown;
 
         const sidebarStarters = await lazy
-          .generateConversationStartersSidebar(contextTabs, 2, memoriesEnabled)
+          .generateConversationStartersSidebar(
+            contextTabs,
+            2,
+            memoriesEnabled,
+            this.conversationId
+          )
           .catch(e => {
             lazy.log.error("[Prompts] Failed to generate sidebar starters:", e);
             return null;
@@ -798,11 +801,10 @@ export class AIWindow extends MozLitElement {
    * Helper method to get or create the smartbar element
    *
    * @param {Document} doc - The document
-   * @param {Element} container - The container element
    */
-  #getOrCreateSmartbar(doc, container) {
+  #getOrCreateSmartbar(doc) {
     // Find existing Smartbar or create it when we init the AI Window.
-    let smartbar = container.querySelector("#ai-window-smartbar");
+    let smartbar = this.renderRoot.querySelector("#ai-window-smartbar");
 
     if (!smartbar) {
       // The Smartbar can't be initialized in the shadow DOM and needs
@@ -825,7 +827,7 @@ export class AIWindow extends MozLitElement {
       const smartbarWrapper = doc.createElement("div");
       smartbarWrapper.id = "smartbar-wrapper";
       smartbarWrapper.appendChild(smartbar);
-      container.append(smartbarWrapper);
+      this.renderRoot.querySelector("#smartbar-slot").append(smartbarWrapper);
 
       // Always show the list of suggestions above input in sidebar mode and
       // below when in fullpage mode.
@@ -847,7 +849,7 @@ export class AIWindow extends MozLitElement {
     this.#observeSmartbarHeight();
 
     // Create toggle button, like with Smartbar above
-    let toggleButton = container.querySelector("#smartbar-toggle-button");
+    let toggleButton = this.renderRoot.querySelector("#smartbar-toggle-button");
 
     if (!toggleButton) {
       toggleButton = doc.createElement("moz-button");
@@ -865,7 +867,7 @@ export class AIWindow extends MozLitElement {
           lazy.AIWindow.toggleAIWindow(chromeWindow, true);
         }
       });
-      container.appendChild(toggleButton);
+      this.renderRoot.querySelector("#smartbar-slot").append(toggleButton);
     }
     this.#smartbarToggleButton = toggleButton;
     this.#updateSmartbarVisibility();
@@ -962,6 +964,7 @@ export class AIWindow extends MozLitElement {
       contextMentions = [],
       contextPageUrl,
       event: triggeringEvent,
+      location: sourceLocation,
     } = event.detail;
     if (action === ACTION.CHAT) {
       const { mergedMentions, allUrls, inlineMentions } =
@@ -970,12 +973,15 @@ export class AIWindow extends MozLitElement {
       if (allUrls.size) {
         this.#conversation.addSeenUrls(allUrls);
       }
+      const isButtonClick =
+        triggeringEvent?.type === "aiwindow-input-cta:on-action";
       this.submitChatMessage({
         text: value,
         contextMentions: mergedMentions,
         contextPageUrl,
-        submitType: triggeringEvent?.type === "click" ? "button" : "enter",
+        submitType: isButtonClick ? "button" : "enter",
         inlineMentionsCount: inlineMentions.length,
+        sourceLocation,
       });
     } else if (
       this.mode === MODE.SIDEBAR &&
@@ -1042,6 +1048,7 @@ export class AIWindow extends MozLitElement {
    * @param {?URL} [options.contextPageUrl] - Page URL string from the smartbar's current
    *   state. null means the user removed page context
    * @param {number} [options.inlineMentionsCount] - Number of inline mentions
+   * @param {string} [options.sourceLocation] - Override smartbar location
    */
   submitChatMessage({
     text,
@@ -1049,6 +1056,7 @@ export class AIWindow extends MozLitElement {
     contextMentions = [],
     contextPageUrl,
     inlineMentionsCount = 0,
+    sourceLocation,
   }) {
     const trimmed = String(text ?? "").trim();
     if (!trimmed) {
@@ -1057,8 +1065,9 @@ export class AIWindow extends MozLitElement {
 
     Glean.smartWindow.chatSubmit.record({
       chat_id: this.conversationId,
-      detected_intent: this.#smartbar.smartbarAction,
-      location: this.mode,
+      detected_intent: this.#smartbar.detectedIntent,
+      length: String(trimmed.length),
+      location: sourceLocation ?? this.mode,
       mentions: inlineMentionsCount,
       message_seq: this.conversationMessageCount,
       model: this.modelName,
@@ -1147,7 +1156,7 @@ export class AIWindow extends MozLitElement {
     const { pageUrl: contextPageUrl, contextWebsites } =
       this.#smartbar.getCurrentContextData();
 
-    const submitType = starter ? "starter" : "suggestion";
+    const submitType = starter ? "starter" : "follow-up";
     this.submitChatMessage({
       text,
       contextWebsites,
@@ -1217,7 +1226,8 @@ export class AIWindow extends MozLitElement {
         title: this.#conversation.pageMeta?.title || "",
         description: this.#conversation.pageMeta?.description || "",
       },
-      assistantResponse
+      assistantResponse,
+      this.conversationId
     );
     const title = await this.#conversation.titlePromise;
     delete this.#conversation.titlePromise;
@@ -1300,8 +1310,7 @@ export class AIWindow extends MozLitElement {
       const engineInstance = await lazy.openAIEngine.build(
         lazy.MODEL_FEATURES.CHAT,
         lazy.DEFAULT_ENGINE_ID,
-        lazy.SERVICE_TYPES.AI,
-        lazy.PURPOSES.CHAT
+        this.conversationId
       );
 
       if (inputText) {
@@ -1343,6 +1352,12 @@ export class AIWindow extends MozLitElement {
 
   #onMessageComplete = (_event, msg) => {
     this.#addConversationTitle(msg?.content?.body);
+    this.#dispatchMessageToChatContent({
+      role: "assistant-message-complete",
+      content: {
+        id: msg?.id,
+      },
+    });
     const followupCount = msg?.tokens?.followup?.length;
     if (followupCount) {
       this.onQuickPromptDisplayed(followupCount);
@@ -1940,15 +1955,33 @@ export class AIWindow extends MozLitElement {
           `
         : ""}
       <div id="browser-container"></div>
-      ${this.showStarters
+      ${this.mode === MODE.SIDEBAR
         ? html`
-            <smartwindow-prompts
-              .prompts=${this.#starters}
-              .mode=${this.mode}
-              @SmartWindowPrompt:prompt-selected=${this.#handlePromptSelected}
-            ></smartwindow-prompts>
+            ${this.showStarters
+              ? html`
+                  <smartwindow-prompts
+                    .prompts=${this.#starters}
+                    .mode=${this.mode}
+                    @SmartWindowPrompt:prompt-selected=${this
+                      .#handlePromptSelected}
+                  ></smartwindow-prompts>
+                `
+              : ""}
+            <div id="smartbar-slot"></div>
           `
-        : ""}
+        : html`
+            <div id="smartbar-slot"></div>
+            ${this.showStarters
+              ? html`
+                  <smartwindow-prompts
+                    .prompts=${this.#starters}
+                    .mode=${this.mode}
+                    @SmartWindowPrompt:prompt-selected=${this
+                      .#handlePromptSelected}
+                  ></smartwindow-prompts>
+                `
+              : ""}
+          `}
       ${this.showDisclaimer
         ? html`<div
             data-l10n-id="smartwindow-disclaimer"

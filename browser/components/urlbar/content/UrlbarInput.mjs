@@ -16,6 +16,12 @@ const { AppConstants } = ChromeUtils.importESModule(
  */
 
 /**
+ * The current window mode.
+ *
+ * @typedef {"classic" | "private" | "smartwindow"} WindowMode
+ */
+
+/**
  * @typedef {object} AutofillPlaceholder
  * @property {string} value
  *   The autofill value.
@@ -33,6 +39,8 @@ const { AppConstants } = ChromeUtils.importESModule(
  */
 
 const lazy = XPCOMUtils.declareLazy({
+  AIWindow:
+    "moz-src:///browser/components/aiwindow/ui/modules/AIWindow.sys.mjs",
   ASRouter: "resource:///modules/asrouter/ASRouter.sys.mjs",
   BrowserSearchTelemetry:
     "moz-src:///browser/components/search/BrowserSearchTelemetry.sys.mjs",
@@ -624,6 +632,20 @@ ${
 
   get sapName() {
     return this.#sapName;
+  }
+
+  /**
+   * Gets the window mode for telemetry.
+   *
+   * @returns {WindowMode} The window mode.
+   */
+  get windowMode() {
+    if (this.isPrivate) {
+      return "private";
+    }
+    return lazy.AIWindow.isAIWindowActive(this.window)
+      ? "smartwindow"
+      : "classic";
   }
 
   blur() {
@@ -1245,6 +1267,7 @@ ${
       searchString: typedValue,
       result: selectedResult || this._resultForCurrentValue || null,
       searchSource: this.getSearchSource(event),
+      windowMode: this.windowMode,
     });
 
     if (this.#isAddressbar && URL.canParse(url)) {
@@ -1470,6 +1493,7 @@ ${
         searchString: this._lastSearchString,
         selType: "dismiss",
         searchSource: this.getSearchSource(event),
+        windowMode: this.windowMode,
       });
       this.view.onQueryResultRemoved(result.rowIndex);
       return;
@@ -1512,6 +1536,7 @@ ${
         selType: "canonized",
         searchString: this._lastSearchString,
         searchSource: this.getSearchSource(event),
+        windowMode: this.windowMode,
       });
       this._loadURL(this._untrimmedValue, event, where, openParams, browser);
       return;
@@ -1597,6 +1622,7 @@ ${
             element
           ),
           searchSource: this.getSearchSource(event),
+          windowMode: this.windowMode,
         });
 
         let activeSplitView = this.window.gBrowser.selectedTab.splitview;
@@ -1650,6 +1676,7 @@ ${
               element
             ),
             searchSource: this.getSearchSource(event),
+            windowMode: this.windowMode,
           });
           this.maybeConfirmSearchModeFromResult({
             result,
@@ -1738,6 +1765,7 @@ ${
           selType: "tip",
           searchString: this._lastSearchString,
           searchSource: this.getSearchSource(event),
+          windowMode: this.windowMode,
         });
         return;
       }
@@ -1763,6 +1791,7 @@ ${
               element
             ),
             searchSource: this.getSearchSource(event),
+            windowMode: this.windowMode,
           });
           return;
         }
@@ -1775,6 +1804,7 @@ ${
           selType: "extension",
           searchString: this._lastSearchString,
           searchSource: this.getSearchSource(event),
+          windowMode: this.windowMode,
         });
 
         // The urlbar needs to revert to the loaded url when a command is
@@ -1804,6 +1834,7 @@ ${
             element
           ),
           searchSource: this.getSearchSource(event),
+          windowMode: this.windowMode,
         });
         this.maybeConfirmSearchModeFromResult({
           result,
@@ -1823,6 +1854,7 @@ ${
             element
           ),
           searchSource: this.getSearchSource(event),
+          windowMode: this.windowMode,
         });
         return;
       }
@@ -1898,6 +1930,7 @@ ${
       searchString: this._lastSearchString,
       selType: this.controller.engagementEvent.typeFromElement(result, element),
       searchSource: this.getSearchSource(event),
+      windowMode: this.windowMode,
     });
 
     this.controller.engagementEvent.record(event, {
@@ -1906,6 +1939,7 @@ ${
       searchString: this._lastSearchString,
       selType: this.controller.engagementEvent.typeFromElement(result, element),
       searchSource: this.getSearchSource(event),
+      windowMode: this.windowMode,
     });
 
     if (result.payload.sendAttributionRequest) {
@@ -3061,6 +3095,7 @@ ${
       this.controller.engagementEvent.record(event, {
         searchString: this._lastSearchString,
         searchSource: this.getSearchSource(event),
+        windowMode: this.windowMode,
       });
     }
 
@@ -3893,6 +3928,7 @@ ${
       searchString: this._lastSearchString,
       selType: element.dataset.command,
       searchSource: this.getSearchSource(event),
+      windowMode: this.windowMode,
     });
 
     if (element.dataset.command == "manage") {
@@ -4913,12 +4949,18 @@ ${
   }
 
   /**
+   * Used to indicate if the input already has focus when a click is made, and
+   * if so, then we shouldn't select all the text.
+   */
+  #preventClickSelectsAll = false;
+
+  /**
    * Determines if we should select all the text in the Urlbar based on the
    *  Urlbar state, and whether the selection is empty.
    */
   #maybeSelectAll() {
     if (
-      !this._preventClickSelectsAll &&
+      !this.#preventClickSelectsAll &&
       this.#compositionState != lazy.UrlbarUtils.COMPOSITION.COMPOSING &&
       this.focused &&
       this.inputField.selectionStart == this.inputField.selectionEnd
@@ -4954,12 +4996,16 @@ ${
     this.controller.engagementEvent.record(event, {
       searchString: this._lastSearchString,
       searchSource: this.getSearchSource(event),
+      windowMode: this.windowMode,
     });
 
     this.focusedViaMousedown = false;
     this._handoffSession = undefined;
     this._isHandoffSession = false;
     this.removeAttribute("focused");
+    // Reset this, so that it doesn't cause issues with different tests
+    // when they focus and select the address bar.
+    this.#preventClickSelectsAll = false;
 
     if (this._autofillPlaceholder && this.userTypedValue) {
       // If we were autofilling, remove the autofilled portion, by restoring
@@ -5149,7 +5195,7 @@ ${
         }
 
         this.focusedViaMousedown = !this.focused;
-        this._preventClickSelectsAll = this.focused;
+        this.#preventClickSelectsAll = this.focused;
 
         // Keep the focus status, since the attribute may be changed
         // upon calling this.focus().
@@ -5185,7 +5231,7 @@ ${
         }
         // Don't close the view when clicking on a tab; we may want to keep the
         // view open on tab switch, and the TabSelect event arrived earlier.
-        if (event.target.closest("tab")) {
+        if (event.target.closest?.("tab")) {
           break;
         }
 
@@ -5203,6 +5249,7 @@ ${
             this.controller.engagementEvent.record(blurEvent, {
               searchString: this._lastSearchString,
               searchSource: this.getSearchSource(blurEvent),
+              windowMode: this.windowMode,
             });
           }
 

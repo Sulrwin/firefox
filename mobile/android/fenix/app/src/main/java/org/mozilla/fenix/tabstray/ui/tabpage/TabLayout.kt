@@ -129,6 +129,7 @@ private val TabListBorderMiddleItemShape = RoundedCornerShape(4.dp)
  * @param onItemLongClick Invoked when the user long clicks a tab.
  * @param onMove Invoked when the user moves a tab.
  * @param onTabDragStart Invoked when starting to drag a tab.
+ * @param onDeleteTabGroup Invoked when the user clicks on delete tab group.
  * @param header Optional layout to display before [tabs].
  * @param contentPadding Optional PaddingValues to pad the tab's content.
  */
@@ -145,6 +146,7 @@ fun TabLayout(
     onItemLongClick: (TabsTrayItem) -> Unit,
     onMove: (String, String?, Boolean) -> Unit,
     onTabDragStart: () -> Unit,
+    onDeleteTabGroup: (TabsTrayItem.TabGroup) -> Unit,
     header: (@Composable () -> Unit)? = null,
     contentPadding: PaddingValues = defaultTabLayoutContentPadding(),
 ) {
@@ -170,6 +172,7 @@ fun TabLayout(
             onItemLongClick = onItemLongClick,
             onMove = onMove,
             onTabDragStart = onTabDragStart,
+            onDeleteTabGroup = onDeleteTabGroup,
             header = header,
             contentPadding = contentPadding,
         )
@@ -204,6 +207,7 @@ private fun TabGrid(
     onItemLongClick: (TabsTrayItem) -> Unit,
     onMove: (String, String?, Boolean) -> Unit,
     onTabDragStart: () -> Unit,
+    onDeleteTabGroup: (TabsTrayItem.TabGroup) -> Unit,
     header: (@Composable () -> Unit)? = null,
 ) {
     val gridState = rememberLazyGridState(initialFirstVisibleItemIndex = selectedTabIndex)
@@ -271,6 +275,7 @@ private fun TabGrid(
                     gridState = gridState,
                     onTabClose = onTabClose,
                     onItemClick = onItemClick,
+                    onDeleteTabGroup = onDeleteTabGroup,
                 )
             }
 
@@ -295,6 +300,7 @@ private fun LazyGridItemScope.TabGridItemContent(
     gridState: LazyGridState,
     onTabClose: (TabsTrayItem.Tab) -> Unit,
     onItemClick: (TabsTrayItem) -> Unit,
+    onDeleteTabGroup: (TabsTrayItem.TabGroup) -> Unit,
 ) {
     val decayAnimationSpec: DecayAnimationSpec<Float> = rememberSplineBasedDecay()
     val density = LocalDensity.current
@@ -316,7 +322,7 @@ private fun LazyGridItemScope.TabGridItemContent(
         position = index + if (hasHeader) 1 else 0,
         key = tabsTrayItem.id,
         swipingActive = swipingActive,
-    ) {
+    ) { interactionState ->
         val selectionState = TabsTrayItemSelectionState(
             isFocused = isSelected,
             isSelected = isMultiSelected,
@@ -332,6 +338,7 @@ private fun LazyGridItemScope.TabGridItemContent(
                     swipeState = swipeState,
                     onCloseClick = onTabClose,
                     onClick = onItemClick,
+                    interactionState = interactionState,
                 )
             }
 
@@ -340,6 +347,8 @@ private fun LazyGridItemScope.TabGridItemContent(
                     group = tabsTrayItem,
                     selectionState = selectionState,
                     clickHandler = TabsTrayItemClickHandler(onClick = onItemClick),
+                    interactionState = interactionState,
+                    onDeleteTabGroup = onDeleteTabGroup,
                 )
             }
         }
@@ -587,6 +596,7 @@ private fun TabListPreview(
                 onItemClick = {},
                 onItemLongClick = {},
                 onTabDragStart = {},
+                onDeleteTabGroup = {},
                 onMove = { _, _, _ -> },
             )
         }
@@ -616,6 +626,7 @@ private fun TabGridPreview(
             onItemClick = {},
             onItemLongClick = {},
             onTabDragStart = {},
+            onDeleteTabGroup = {},
             onMove = { _, _, _ -> },
         )
     }
@@ -688,6 +699,7 @@ private fun MultiSelectPreview(
             },
             onItemLongClick = {},
             onTabDragStart = {},
+            onDeleteTabGroup = {},
             onMove = { _, _, _ -> },
         )
     }

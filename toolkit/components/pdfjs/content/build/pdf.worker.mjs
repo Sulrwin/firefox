@@ -21,8 +21,8 @@
  */
 
 /**
- * pdfjsVersion = 5.6.224
- * pdfjsBuild = e37709ea7
+ * pdfjsVersion = 5.7.85
+ * pdfjsBuild = d6afffe8f
  */
 /******/ // The require scope
 /******/ var __webpack_require__ = {};
@@ -503,20 +503,9 @@ function isLittleEndian() {
   const view32 = new Uint32Array(buffer8.buffer, 0, 1);
   return view32[0] === 1;
 }
-function isEvalSupported() {
-  try {
-    new Function("");
-    return true;
-  } catch {
-    return false;
-  }
-}
 class FeatureTest {
   static get isLittleEndian() {
     return shadow(this, "isLittleEndian", isLittleEndian());
-  }
-  static get isEvalSupported() {
-    return shadow(this, "isEvalSupported", isEvalSupported());
   }
   static get isOffscreenCanvasSupported() {
     return shadow(this, "isOffscreenCanvasSupported", typeof OffscreenCanvas !== "undefined");
@@ -895,9 +884,6 @@ function _isValidExplicitDest(validRef, validName, dest) {
 const makeArr = () => [];
 const makeMap = () => new Map();
 const makeObj = () => Object.create(null);
-function MathClamp(v, min, max) {
-  return Math.min(Math.max(v, min), max);
-}
 
 ;// ./src/core/primitives.js
 
@@ -2009,7 +1995,13 @@ async function __wbg_init(module_or_path) {
 }
 
 /* harmony default export */ const qcms = ((/* unused pure expression or super */ null && (__wbg_init)));
+;// ./src/shared/math_clamp.js
+function MathClamp(v, min, max) {
+  return Math.min(Math.max(v, min), max);
+}
+
 ;// ./src/core/colorspace.js
+
 
 
 function resizeRgbImage(src, dest, w1, h1, w2, h2, alpha01) {
@@ -2913,6 +2905,7 @@ class NullStream extends Stream {
 }
 
 ;// ./src/core/chunked_stream.js
+
 
 
 
@@ -6974,6 +6967,7 @@ class StreamsSequenceStream extends DecodeStream {
 
 
 
+
 class ColorSpaceUtils {
   static parse({
     cs,
@@ -9732,6 +9726,907 @@ class OperatorList {
     this.weight = 0;
     this.optimizer.reset();
   }
+}
+
+;// ./src/core/pattern.js
+
+
+
+
+
+const ShadingType = {
+  FUNCTION_BASED: 1,
+  AXIAL: 2,
+  RADIAL: 3,
+  FREE_FORM_MESH: 4,
+  LATTICE_FORM_MESH: 5,
+  COONS_PATCH_MESH: 6,
+  TENSOR_PATCH_MESH: 7
+};
+class Pattern {
+  static #hasGPU = false;
+  constructor() {
+    unreachable("Cannot initialize Pattern.");
+  }
+  static setOptions({
+    hasGPU
+  }) {
+    this.#hasGPU = hasGPU;
+  }
+  static parseShading(shading, xref, res, pdfFunctionFactory, globalColorSpaceCache, localColorSpaceCache) {
+    const dict = shading instanceof BaseStream ? shading.dict : shading;
+    const type = dict.get("ShadingType");
+    try {
+      switch (type) {
+        case ShadingType.FUNCTION_BASED:
+          return new FunctionBasedShading(dict, xref, res, pdfFunctionFactory, globalColorSpaceCache, localColorSpaceCache);
+        case ShadingType.AXIAL:
+        case ShadingType.RADIAL:
+          return new RadialAxialShading(dict, xref, res, pdfFunctionFactory, globalColorSpaceCache, localColorSpaceCache);
+        case ShadingType.FREE_FORM_MESH:
+        case ShadingType.LATTICE_FORM_MESH:
+        case ShadingType.COONS_PATCH_MESH:
+        case ShadingType.TENSOR_PATCH_MESH:
+          return new MeshShading(shading, xref, res, pdfFunctionFactory, globalColorSpaceCache, localColorSpaceCache);
+        default:
+          throw new FormatError("Unsupported ShadingType: " + type);
+      }
+    } catch (ex) {
+      if (ex instanceof MissingDataException) {
+        throw ex;
+      }
+      warn(ex);
+      return new DummyShading();
+    }
+  }
+}
+class BaseShading {
+  static SMALL_NUMBER = 1e-6;
+  getIR() {
+    unreachable("Abstract method `getIR` called.");
+  }
+}
+class RadialAxialShading extends BaseShading {
+  constructor(dict, xref, resources, pdfFunctionFactory, globalColorSpaceCache, localColorSpaceCache) {
+    super();
+    this.shadingType = dict.get("ShadingType");
+    let coordsLen = 0;
+    if (this.shadingType === ShadingType.AXIAL) {
+      coordsLen = 4;
+    } else if (this.shadingType === ShadingType.RADIAL) {
+      coordsLen = 6;
+    }
+    this.coordsArr = dict.getArray("Coords");
+    if (!isNumberArray(this.coordsArr, coordsLen)) {
+      throw new FormatError("RadialAxialShading: Invalid /Coords array.");
+    }
+    const cs = ColorSpaceUtils.parse({
+      cs: dict.getRaw("CS") || dict.getRaw("ColorSpace"),
+      xref,
+      resources,
+      pdfFunctionFactory,
+      globalColorSpaceCache,
+      localColorSpaceCache
+    });
+    this.bbox = lookupNormalRect(dict.getArray("BBox"), null);
+    let t0 = 0.0,
+      t1 = 1.0;
+    const domainArr = dict.getArray("Domain");
+    if (isNumberArray(domainArr, 2)) {
+      [t0, t1] = domainArr;
+    }
+    let extendStart = false,
+      extendEnd = false;
+    const extendArr = dict.getArray("Extend");
+    if (isBooleanArray(extendArr, 2)) {
+      [extendStart, extendEnd] = extendArr;
+    }
+    this.extendStart = extendStart;
+    this.extendEnd = extendEnd;
+    const fnObj = dict.getRaw("Function");
+    const fn = pdfFunctionFactory.create(fnObj, true);
+    const NUMBER_OF_SAMPLES = 840;
+    const step = (t1 - t0) / NUMBER_OF_SAMPLES;
+    const colorStops = this.colorStops = [];
+    if (t0 >= t1 || step <= 0) {
+      info("Bad shading domain.");
+      return;
+    }
+    const color = new Float32Array(cs.numComps),
+      ratio = new Float32Array(1);
+    let iBase = 0;
+    ratio[0] = t0;
+    fn(ratio, 0, color, 0);
+    const rgbBuffer = new Uint8ClampedArray(3);
+    cs.getRgb(color, 0, rgbBuffer);
+    let [rBase, gBase, bBase] = rgbBuffer;
+    colorStops.push([0, Util.makeHexColor(rBase, gBase, bBase)]);
+    let iPrev = 1;
+    ratio[0] = t0 + step;
+    fn(ratio, 0, color, 0);
+    cs.getRgb(color, 0, rgbBuffer);
+    let [rPrev, gPrev, bPrev] = rgbBuffer;
+    let maxSlopeR = rPrev - rBase + 1;
+    let maxSlopeG = gPrev - gBase + 1;
+    let maxSlopeB = bPrev - bBase + 1;
+    let minSlopeR = rPrev - rBase - 1;
+    let minSlopeG = gPrev - gBase - 1;
+    let minSlopeB = bPrev - bBase - 1;
+    for (let i = 2; i < NUMBER_OF_SAMPLES; i++) {
+      ratio[0] = t0 + i * step;
+      fn(ratio, 0, color, 0);
+      cs.getRgb(color, 0, rgbBuffer);
+      const [r, g, b] = rgbBuffer;
+      const run = i - iBase;
+      maxSlopeR = Math.min(maxSlopeR, (r - rBase + 1) / run);
+      maxSlopeG = Math.min(maxSlopeG, (g - gBase + 1) / run);
+      maxSlopeB = Math.min(maxSlopeB, (b - bBase + 1) / run);
+      minSlopeR = Math.max(minSlopeR, (r - rBase - 1) / run);
+      minSlopeG = Math.max(minSlopeG, (g - gBase - 1) / run);
+      minSlopeB = Math.max(minSlopeB, (b - bBase - 1) / run);
+      const slopesExist = minSlopeR <= maxSlopeR && minSlopeG <= maxSlopeG && minSlopeB <= maxSlopeB;
+      if (!slopesExist) {
+        const cssColor = Util.makeHexColor(rPrev, gPrev, bPrev);
+        colorStops.push([iPrev / NUMBER_OF_SAMPLES, cssColor]);
+        maxSlopeR = r - rPrev + 1;
+        maxSlopeG = g - gPrev + 1;
+        maxSlopeB = b - bPrev + 1;
+        minSlopeR = r - rPrev - 1;
+        minSlopeG = g - gPrev - 1;
+        minSlopeB = b - bPrev - 1;
+        iBase = iPrev;
+        rBase = rPrev;
+        gBase = gPrev;
+        bBase = bPrev;
+      }
+      iPrev = i;
+      rPrev = r;
+      gPrev = g;
+      bPrev = b;
+    }
+    colorStops.push([1, Util.makeHexColor(rPrev, gPrev, bPrev)]);
+    let background = "transparent";
+    if (dict.has("Background")) {
+      background = cs.getRgbHex(dict.get("Background"), 0);
+    }
+    if (!extendStart) {
+      colorStops.unshift([0, background]);
+      colorStops[1][0] += BaseShading.SMALL_NUMBER;
+    }
+    if (!extendEnd) {
+      colorStops.at(-1)[0] -= BaseShading.SMALL_NUMBER;
+      colorStops.push([1, background]);
+    }
+    this.colorStops = colorStops;
+  }
+  getIR() {
+    const {
+      coordsArr,
+      shadingType
+    } = this;
+    let type, p0, p1, r0, r1;
+    if (shadingType === ShadingType.AXIAL) {
+      p0 = [coordsArr[0], coordsArr[1]];
+      p1 = [coordsArr[2], coordsArr[3]];
+      r0 = null;
+      r1 = null;
+      type = "axial";
+    } else if (shadingType === ShadingType.RADIAL) {
+      p0 = [coordsArr[0], coordsArr[1]];
+      p1 = [coordsArr[3], coordsArr[4]];
+      r0 = coordsArr[2];
+      r1 = coordsArr[5];
+      type = "radial";
+    } else {
+      unreachable(`getPattern type unknown: ${shadingType}`);
+    }
+    return ["RadialAxial", type, this.bbox, this.colorStops, p0, p1, r0, r1];
+  }
+}
+function meshUpdateBounds(self) {
+  let minX = self.coords[0][0],
+    minY = self.coords[0][1],
+    maxX = minX,
+    maxY = minY;
+  for (let i = 1, ii = self.coords.length; i < ii; i++) {
+    const x = self.coords[i][0],
+      y = self.coords[i][1];
+    minX = minX > x ? x : minX;
+    minY = minY > y ? y : minY;
+    maxX = maxX < x ? x : maxX;
+    maxY = maxY < y ? y : maxY;
+  }
+  self.bounds = [minX, minY, maxX, maxY];
+}
+function meshPackData(self) {
+  let i, j, ii;
+  const coords = self.coords;
+  const coordsPacked = new Float32Array(coords.length * 2);
+  for (i = 0, j = 0, ii = coords.length; i < ii; i++) {
+    const xy = coords[i];
+    coordsPacked[j++] = xy[0];
+    coordsPacked[j++] = xy[1];
+  }
+  self.coords = coordsPacked;
+  const colors = self.colors;
+  const colorsPacked = new Uint8Array(colors.length * 4);
+  for (i = 0, j = 0, ii = colors.length; i < ii; i++) {
+    const c = colors[i];
+    colorsPacked[j++] = c[0];
+    colorsPacked[j++] = c[1];
+    colorsPacked[j++] = c[2];
+    j++;
+  }
+  self.colors = colorsPacked;
+  for (const figure of self.figures) {
+    figure.coords = new Uint32Array(figure.coords);
+    figure.colors = new Uint32Array(figure.colors);
+  }
+}
+class FunctionBasedShading extends BaseShading {
+  static MAX_STEP_COUNT = 512;
+  constructor(dict, xref, resources, pdfFunctionFactory, globalColorSpaceCache, localColorSpaceCache) {
+    super();
+    this.bbox = lookupNormalRect(dict.getArray("BBox"), null);
+    const cs = ColorSpaceUtils.parse({
+      cs: dict.getRaw("CS") || dict.getRaw("ColorSpace"),
+      xref,
+      resources,
+      pdfFunctionFactory,
+      globalColorSpaceCache,
+      localColorSpaceCache
+    });
+    this.background = dict.has("Background") ? cs.getRgb(dict.get("Background"), 0) : null;
+    const fnObj = dict.getRaw("Function");
+    if (!fnObj) {
+      throw new FormatError("FunctionBasedShading: missing /Function");
+    }
+    const fn = pdfFunctionFactory.create(fnObj, true);
+    let x0 = 0,
+      x1 = 1,
+      y0 = 0,
+      y1 = 1;
+    const domainArr = lookupRect(dict.getArray("Domain"), null);
+    if (domainArr) {
+      [x0, x1, y0, y1] = domainArr;
+    }
+    const matrix = lookupMatrix(dict.getArray("Matrix"), IDENTITY_MATRIX);
+    this.bounds = [Infinity, Infinity, -Infinity, -Infinity];
+    Util.axialAlignedBoundingBox([x0, y0, x1, y1], matrix, this.bounds);
+    const bboxW = this.bounds[2] - this.bounds[0];
+    const bboxH = this.bounds[3] - this.bounds[1];
+    const stepsX = MathClamp(Math.ceil(bboxW), 1, FunctionBasedShading.MAX_STEP_COUNT);
+    const stepsY = MathClamp(Math.ceil(bboxH), 1, FunctionBasedShading.MAX_STEP_COUNT);
+    const verticesPerRow = stepsX + 1;
+    const totalVertices = (stepsY + 1) * verticesPerRow;
+    const coords = this.coords = new Float32Array(totalVertices * 2);
+    const colors = this.colors = new Uint8ClampedArray(totalVertices * 4);
+    const xyBuf = new Float32Array(2);
+    const colorBuf = new Float32Array(cs.numComps);
+    const rangeX = (x1 - x0) / stepsX;
+    const rangeY = (y1 - y0) / stepsY;
+    const halfStepX = rangeX / 2;
+    const halfStepY = rangeY / 2;
+    let coordOffset = 0;
+    let colorOffset = 0;
+    for (let row = 0; row <= stepsY; row++) {
+      const yDomain = y0 + rangeY * row;
+      xyBuf[1] = row === stepsY ? yDomain - halfStepY : yDomain;
+      for (let col = 0; col <= stepsX; col++) {
+        const xDomain = x0 + rangeX * col;
+        xyBuf[0] = col === stepsX ? xDomain - halfStepX : xDomain;
+        fn(xyBuf, 0, colorBuf, 0);
+        coords[coordOffset] = xDomain;
+        coords[coordOffset + 1] = yDomain;
+        Util.applyTransform(coords, matrix, coordOffset);
+        coordOffset += 2;
+        cs.getRgbItem(colorBuf, 0, colors, colorOffset);
+        colorOffset += 4;
+      }
+    }
+    const ps = new Uint32Array(totalVertices);
+    for (let i = 0; i < totalVertices; i++) {
+      ps[i] = i;
+    }
+    this.figures = [{
+      type: MeshFigureType.LATTICE,
+      coords: ps,
+      colors: new Uint32Array(ps),
+      verticesPerRow
+    }];
+  }
+  getIR() {
+    return ["Mesh", ShadingType.FUNCTION_BASED, this.coords, this.colors, this.figures, this.bounds, this.bbox, this.background];
+  }
+}
+class MeshStreamReader {
+  constructor(stream, context) {
+    this.stream = stream;
+    this.context = context;
+    this.buffer = 0;
+    this.bufferLength = 0;
+    const numComps = context.numComps;
+    this.tmpCompsBuf = new Float32Array(numComps);
+    const csNumComps = context.colorSpace.numComps;
+    this.tmpCsCompsBuf = context.colorFn ? new Float32Array(csNumComps) : this.tmpCompsBuf;
+  }
+  get hasData() {
+    if (this.stream.end) {
+      return this.stream.pos < this.stream.end;
+    }
+    if (this.bufferLength > 0) {
+      return true;
+    }
+    const nextByte = this.stream.getByte();
+    if (nextByte < 0) {
+      return false;
+    }
+    this.buffer = nextByte;
+    this.bufferLength = 8;
+    return true;
+  }
+  readBits(n) {
+    const {
+      stream
+    } = this;
+    let {
+      buffer,
+      bufferLength
+    } = this;
+    if (n === 32) {
+      if (bufferLength === 0) {
+        return stream.getInt32() >>> 0;
+      }
+      buffer = buffer << 24 | stream.getByte() << 16 | stream.getByte() << 8 | stream.getByte();
+      const nextByte = stream.getByte();
+      this.buffer = nextByte & (1 << bufferLength) - 1;
+      return (buffer << 8 - bufferLength | (nextByte & 0xff) >> bufferLength) >>> 0;
+    }
+    if (n === 8 && bufferLength === 0) {
+      return stream.getByte();
+    }
+    while (bufferLength < n) {
+      buffer = buffer << 8 | stream.getByte();
+      bufferLength += 8;
+    }
+    bufferLength -= n;
+    this.bufferLength = bufferLength;
+    this.buffer = buffer & (1 << bufferLength) - 1;
+    return buffer >> bufferLength;
+  }
+  align() {
+    this.buffer = 0;
+    this.bufferLength = 0;
+  }
+  readFlag() {
+    return this.readBits(this.context.bitsPerFlag);
+  }
+  readCoordinate() {
+    const {
+      bitsPerCoordinate,
+      decode
+    } = this.context;
+    const xi = this.readBits(bitsPerCoordinate);
+    const yi = this.readBits(bitsPerCoordinate);
+    const scale = bitsPerCoordinate < 32 ? 1 / ((1 << bitsPerCoordinate) - 1) : 2.3283064365386963e-10;
+    return [xi * scale * (decode[1] - decode[0]) + decode[0], yi * scale * (decode[3] - decode[2]) + decode[2]];
+  }
+  readComponents() {
+    const {
+      bitsPerComponent,
+      colorFn,
+      colorSpace,
+      decode,
+      numComps
+    } = this.context;
+    const scale = bitsPerComponent < 32 ? 1 / ((1 << bitsPerComponent) - 1) : 2.3283064365386963e-10;
+    const components = this.tmpCompsBuf;
+    for (let i = 0, j = 4; i < numComps; i++, j += 2) {
+      const ci = this.readBits(bitsPerComponent);
+      components[i] = ci * scale * (decode[j + 1] - decode[j]) + decode[j];
+    }
+    const color = this.tmpCsCompsBuf;
+    colorFn?.(components, 0, color, 0);
+    return colorSpace.getRgb(color, 0);
+  }
+}
+let bCache = Object.create(null);
+function buildB(count) {
+  const lut = [];
+  for (let i = 0; i <= count; i++) {
+    const t = i / count,
+      t_ = 1 - t;
+    lut.push(new Float32Array([t_ ** 3, 3 * t * t_ ** 2, 3 * t ** 2 * t_, t ** 3]));
+  }
+  return lut;
+}
+function getB(count) {
+  return bCache[count] ||= buildB(count);
+}
+function clearPatternCaches() {
+  bCache = Object.create(null);
+}
+class MeshShading extends BaseShading {
+  static MIN_SPLIT_PATCH_CHUNKS_AMOUNT = 3;
+  static MAX_SPLIT_PATCH_CHUNKS_AMOUNT = 20;
+  static TRIANGLE_DENSITY = 20;
+  constructor(stream, xref, resources, pdfFunctionFactory, globalColorSpaceCache, localColorSpaceCache) {
+    super();
+    if (!(stream instanceof BaseStream)) {
+      throw new FormatError("Mesh data is not a stream");
+    }
+    const dict = stream.dict;
+    this.shadingType = dict.get("ShadingType");
+    this.bbox = lookupNormalRect(dict.getArray("BBox"), null);
+    const cs = ColorSpaceUtils.parse({
+      cs: dict.getRaw("CS") || dict.getRaw("ColorSpace"),
+      xref,
+      resources,
+      pdfFunctionFactory,
+      globalColorSpaceCache,
+      localColorSpaceCache
+    });
+    this.background = dict.has("Background") ? cs.getRgb(dict.get("Background"), 0) : null;
+    const fnObj = dict.getRaw("Function");
+    const fn = fnObj ? pdfFunctionFactory.create(fnObj, true) : null;
+    this.coords = [];
+    this.colors = [];
+    this.figures = [];
+    const decodeContext = {
+      bitsPerCoordinate: dict.get("BitsPerCoordinate"),
+      bitsPerComponent: dict.get("BitsPerComponent"),
+      bitsPerFlag: dict.get("BitsPerFlag"),
+      decode: dict.getArray("Decode"),
+      colorFn: fn,
+      colorSpace: cs,
+      numComps: fn ? 1 : cs.numComps
+    };
+    const reader = new MeshStreamReader(stream, decodeContext);
+    let patchMesh = false;
+    switch (this.shadingType) {
+      case ShadingType.FREE_FORM_MESH:
+        this._decodeType4Shading(reader);
+        break;
+      case ShadingType.LATTICE_FORM_MESH:
+        const verticesPerRow = dict.get("VerticesPerRow") | 0;
+        if (verticesPerRow < 2) {
+          throw new FormatError("Invalid VerticesPerRow");
+        }
+        this._decodeType5Shading(reader, verticesPerRow);
+        break;
+      case ShadingType.COONS_PATCH_MESH:
+        this._decodeType6Shading(reader);
+        patchMesh = true;
+        break;
+      case ShadingType.TENSOR_PATCH_MESH:
+        this._decodeType7Shading(reader);
+        patchMesh = true;
+        break;
+      default:
+        unreachable("Unsupported mesh type.");
+        break;
+    }
+    if (patchMesh) {
+      this._updateBounds();
+      for (let i = 0, ii = this.figures.length; i < ii; i++) {
+        this._buildFigureFromPatch(i);
+      }
+    }
+    this._updateBounds();
+    this._packData();
+  }
+  _decodeType4Shading(reader) {
+    const coords = this.coords;
+    const colors = this.colors;
+    const operators = [];
+    const ps = [];
+    let verticesLeft = 0;
+    while (reader.hasData) {
+      const f = reader.readFlag();
+      const coord = reader.readCoordinate();
+      const color = reader.readComponents();
+      if (verticesLeft === 0) {
+        if (!(0 <= f && f <= 2)) {
+          throw new FormatError("Unknown type4 flag");
+        }
+        switch (f) {
+          case 0:
+            verticesLeft = 3;
+            break;
+          case 1:
+            ps.push(ps.at(-2), ps.at(-1));
+            verticesLeft = 1;
+            break;
+          case 2:
+            ps.push(ps.at(-3), ps.at(-1));
+            verticesLeft = 1;
+            break;
+        }
+        operators.push(f);
+      }
+      ps.push(coords.length);
+      coords.push(coord);
+      colors.push(color);
+      verticesLeft--;
+      reader.align();
+    }
+    this.figures.push({
+      type: MeshFigureType.TRIANGLES,
+      coords: new Int32Array(ps),
+      colors: new Int32Array(ps)
+    });
+  }
+  _decodeType5Shading(reader, verticesPerRow) {
+    const coords = this.coords;
+    const colors = this.colors;
+    const ps = [];
+    while (reader.hasData) {
+      const coord = reader.readCoordinate();
+      const color = reader.readComponents();
+      ps.push(coords.length);
+      coords.push(coord);
+      colors.push(color);
+    }
+    this.figures.push({
+      type: MeshFigureType.LATTICE,
+      coords: new Int32Array(ps),
+      colors: new Int32Array(ps),
+      verticesPerRow
+    });
+  }
+  _decodeType6Shading(reader) {
+    const coords = this.coords;
+    const colors = this.colors;
+    const ps = new Int32Array(16);
+    const cs = new Int32Array(4);
+    while (reader.hasData) {
+      const f = reader.readFlag();
+      if (!(0 <= f && f <= 3)) {
+        throw new FormatError("Unknown type6 flag");
+      }
+      const pi = coords.length;
+      for (let i = 0, ii = f !== 0 ? 8 : 12; i < ii; i++) {
+        coords.push(reader.readCoordinate());
+      }
+      const ci = colors.length;
+      for (let i = 0, ii = f !== 0 ? 2 : 4; i < ii; i++) {
+        colors.push(reader.readComponents());
+      }
+      let tmp1, tmp2, tmp3, tmp4;
+      switch (f) {
+        case 0:
+          ps[12] = pi + 3;
+          ps[13] = pi + 4;
+          ps[14] = pi + 5;
+          ps[15] = pi + 6;
+          ps[8] = pi + 2;
+          ps[11] = pi + 7;
+          ps[4] = pi + 1;
+          ps[7] = pi + 8;
+          ps[0] = pi;
+          ps[1] = pi + 11;
+          ps[2] = pi + 10;
+          ps[3] = pi + 9;
+          cs[2] = ci + 1;
+          cs[3] = ci + 2;
+          cs[0] = ci;
+          cs[1] = ci + 3;
+          break;
+        case 1:
+          tmp1 = ps[12];
+          tmp2 = ps[13];
+          tmp3 = ps[14];
+          tmp4 = ps[15];
+          ps[12] = tmp4;
+          ps[13] = pi + 0;
+          ps[14] = pi + 1;
+          ps[15] = pi + 2;
+          ps[8] = tmp3;
+          ps[11] = pi + 3;
+          ps[4] = tmp2;
+          ps[7] = pi + 4;
+          ps[0] = tmp1;
+          ps[1] = pi + 7;
+          ps[2] = pi + 6;
+          ps[3] = pi + 5;
+          tmp1 = cs[2];
+          tmp2 = cs[3];
+          cs[2] = tmp2;
+          cs[3] = ci;
+          cs[0] = tmp1;
+          cs[1] = ci + 1;
+          break;
+        case 2:
+          tmp1 = ps[15];
+          tmp2 = ps[11];
+          ps[12] = ps[3];
+          ps[13] = pi + 0;
+          ps[14] = pi + 1;
+          ps[15] = pi + 2;
+          ps[8] = ps[7];
+          ps[11] = pi + 3;
+          ps[4] = tmp2;
+          ps[7] = pi + 4;
+          ps[0] = tmp1;
+          ps[1] = pi + 7;
+          ps[2] = pi + 6;
+          ps[3] = pi + 5;
+          tmp1 = cs[3];
+          cs[2] = cs[1];
+          cs[3] = ci;
+          cs[0] = tmp1;
+          cs[1] = ci + 1;
+          break;
+        case 3:
+          ps[12] = ps[0];
+          ps[13] = pi + 0;
+          ps[14] = pi + 1;
+          ps[15] = pi + 2;
+          ps[8] = ps[1];
+          ps[11] = pi + 3;
+          ps[4] = ps[2];
+          ps[7] = pi + 4;
+          ps[0] = ps[3];
+          ps[1] = pi + 7;
+          ps[2] = pi + 6;
+          ps[3] = pi + 5;
+          cs[2] = cs[0];
+          cs[3] = ci;
+          cs[0] = cs[1];
+          cs[1] = ci + 1;
+          break;
+      }
+      ps[5] = coords.length;
+      coords.push([(-4 * coords[ps[0]][0] - coords[ps[15]][0] + 6 * (coords[ps[4]][0] + coords[ps[1]][0]) - 2 * (coords[ps[12]][0] + coords[ps[3]][0]) + 3 * (coords[ps[13]][0] + coords[ps[7]][0])) / 9, (-4 * coords[ps[0]][1] - coords[ps[15]][1] + 6 * (coords[ps[4]][1] + coords[ps[1]][1]) - 2 * (coords[ps[12]][1] + coords[ps[3]][1]) + 3 * (coords[ps[13]][1] + coords[ps[7]][1])) / 9]);
+      ps[6] = coords.length;
+      coords.push([(-4 * coords[ps[3]][0] - coords[ps[12]][0] + 6 * (coords[ps[2]][0] + coords[ps[7]][0]) - 2 * (coords[ps[0]][0] + coords[ps[15]][0]) + 3 * (coords[ps[4]][0] + coords[ps[14]][0])) / 9, (-4 * coords[ps[3]][1] - coords[ps[12]][1] + 6 * (coords[ps[2]][1] + coords[ps[7]][1]) - 2 * (coords[ps[0]][1] + coords[ps[15]][1]) + 3 * (coords[ps[4]][1] + coords[ps[14]][1])) / 9]);
+      ps[9] = coords.length;
+      coords.push([(-4 * coords[ps[12]][0] - coords[ps[3]][0] + 6 * (coords[ps[8]][0] + coords[ps[13]][0]) - 2 * (coords[ps[0]][0] + coords[ps[15]][0]) + 3 * (coords[ps[11]][0] + coords[ps[1]][0])) / 9, (-4 * coords[ps[12]][1] - coords[ps[3]][1] + 6 * (coords[ps[8]][1] + coords[ps[13]][1]) - 2 * (coords[ps[0]][1] + coords[ps[15]][1]) + 3 * (coords[ps[11]][1] + coords[ps[1]][1])) / 9]);
+      ps[10] = coords.length;
+      coords.push([(-4 * coords[ps[15]][0] - coords[ps[0]][0] + 6 * (coords[ps[11]][0] + coords[ps[14]][0]) - 2 * (coords[ps[12]][0] + coords[ps[3]][0]) + 3 * (coords[ps[2]][0] + coords[ps[8]][0])) / 9, (-4 * coords[ps[15]][1] - coords[ps[0]][1] + 6 * (coords[ps[11]][1] + coords[ps[14]][1]) - 2 * (coords[ps[12]][1] + coords[ps[3]][1]) + 3 * (coords[ps[2]][1] + coords[ps[8]][1])) / 9]);
+      this.figures.push({
+        type: MeshFigureType.PATCH,
+        coords: new Int32Array(ps),
+        colors: new Int32Array(cs)
+      });
+    }
+  }
+  _decodeType7Shading(reader) {
+    const coords = this.coords;
+    const colors = this.colors;
+    const ps = new Int32Array(16);
+    const cs = new Int32Array(4);
+    while (reader.hasData) {
+      const f = reader.readFlag();
+      if (!(0 <= f && f <= 3)) {
+        throw new FormatError("Unknown type7 flag");
+      }
+      const pi = coords.length;
+      for (let i = 0, ii = f !== 0 ? 12 : 16; i < ii; i++) {
+        coords.push(reader.readCoordinate());
+      }
+      const ci = colors.length;
+      for (let i = 0, ii = f !== 0 ? 2 : 4; i < ii; i++) {
+        colors.push(reader.readComponents());
+      }
+      let tmp1, tmp2, tmp3, tmp4;
+      switch (f) {
+        case 0:
+          ps[12] = pi + 3;
+          ps[13] = pi + 4;
+          ps[14] = pi + 5;
+          ps[15] = pi + 6;
+          ps[8] = pi + 2;
+          ps[9] = pi + 13;
+          ps[10] = pi + 14;
+          ps[11] = pi + 7;
+          ps[4] = pi + 1;
+          ps[5] = pi + 12;
+          ps[6] = pi + 15;
+          ps[7] = pi + 8;
+          ps[0] = pi;
+          ps[1] = pi + 11;
+          ps[2] = pi + 10;
+          ps[3] = pi + 9;
+          cs[2] = ci + 1;
+          cs[3] = ci + 2;
+          cs[0] = ci;
+          cs[1] = ci + 3;
+          break;
+        case 1:
+          tmp1 = ps[12];
+          tmp2 = ps[13];
+          tmp3 = ps[14];
+          tmp4 = ps[15];
+          ps[12] = tmp4;
+          ps[13] = pi + 0;
+          ps[14] = pi + 1;
+          ps[15] = pi + 2;
+          ps[8] = tmp3;
+          ps[9] = pi + 9;
+          ps[10] = pi + 10;
+          ps[11] = pi + 3;
+          ps[4] = tmp2;
+          ps[5] = pi + 8;
+          ps[6] = pi + 11;
+          ps[7] = pi + 4;
+          ps[0] = tmp1;
+          ps[1] = pi + 7;
+          ps[2] = pi + 6;
+          ps[3] = pi + 5;
+          tmp1 = cs[2];
+          tmp2 = cs[3];
+          cs[2] = tmp2;
+          cs[3] = ci;
+          cs[0] = tmp1;
+          cs[1] = ci + 1;
+          break;
+        case 2:
+          tmp1 = ps[15];
+          tmp2 = ps[11];
+          ps[12] = ps[3];
+          ps[13] = pi + 0;
+          ps[14] = pi + 1;
+          ps[15] = pi + 2;
+          ps[8] = ps[7];
+          ps[9] = pi + 9;
+          ps[10] = pi + 10;
+          ps[11] = pi + 3;
+          ps[4] = tmp2;
+          ps[5] = pi + 8;
+          ps[6] = pi + 11;
+          ps[7] = pi + 4;
+          ps[0] = tmp1;
+          ps[1] = pi + 7;
+          ps[2] = pi + 6;
+          ps[3] = pi + 5;
+          tmp1 = cs[3];
+          cs[2] = cs[1];
+          cs[3] = ci;
+          cs[0] = tmp1;
+          cs[1] = ci + 1;
+          break;
+        case 3:
+          ps[12] = ps[0];
+          ps[13] = pi + 0;
+          ps[14] = pi + 1;
+          ps[15] = pi + 2;
+          ps[8] = ps[1];
+          ps[9] = pi + 9;
+          ps[10] = pi + 10;
+          ps[11] = pi + 3;
+          ps[4] = ps[2];
+          ps[5] = pi + 8;
+          ps[6] = pi + 11;
+          ps[7] = pi + 4;
+          ps[0] = ps[3];
+          ps[1] = pi + 7;
+          ps[2] = pi + 6;
+          ps[3] = pi + 5;
+          cs[2] = cs[0];
+          cs[3] = ci;
+          cs[0] = cs[1];
+          cs[1] = ci + 1;
+          break;
+      }
+      this.figures.push({
+        type: MeshFigureType.PATCH,
+        coords: new Int32Array(ps),
+        colors: new Int32Array(cs)
+      });
+    }
+  }
+  _buildFigureFromPatch(index) {
+    const figure = this.figures[index];
+    assert(figure.type === MeshFigureType.PATCH, "Unexpected patch mesh figure");
+    const coords = this.coords,
+      colors = this.colors;
+    const pi = figure.coords;
+    const ci = figure.colors;
+    const figureMinX = Math.min(coords[pi[0]][0], coords[pi[3]][0], coords[pi[12]][0], coords[pi[15]][0]);
+    const figureMinY = Math.min(coords[pi[0]][1], coords[pi[3]][1], coords[pi[12]][1], coords[pi[15]][1]);
+    const figureMaxX = Math.max(coords[pi[0]][0], coords[pi[3]][0], coords[pi[12]][0], coords[pi[15]][0]);
+    const figureMaxY = Math.max(coords[pi[0]][1], coords[pi[3]][1], coords[pi[12]][1], coords[pi[15]][1]);
+    let splitXBy = Math.ceil((figureMaxX - figureMinX) * MeshShading.TRIANGLE_DENSITY / (this.bounds[2] - this.bounds[0]));
+    splitXBy = MathClamp(splitXBy, MeshShading.MIN_SPLIT_PATCH_CHUNKS_AMOUNT, MeshShading.MAX_SPLIT_PATCH_CHUNKS_AMOUNT);
+    let splitYBy = Math.ceil((figureMaxY - figureMinY) * MeshShading.TRIANGLE_DENSITY / (this.bounds[3] - this.bounds[1]));
+    splitYBy = MathClamp(splitYBy, MeshShading.MIN_SPLIT_PATCH_CHUNKS_AMOUNT, MeshShading.MAX_SPLIT_PATCH_CHUNKS_AMOUNT);
+    const verticesPerRow = splitXBy + 1;
+    const figureCoords = new Int32Array((splitYBy + 1) * verticesPerRow);
+    const figureColors = new Int32Array((splitYBy + 1) * verticesPerRow);
+    let k = 0;
+    const cl = new Uint8Array(3),
+      cr = new Uint8Array(3);
+    const c0 = colors[ci[0]],
+      c1 = colors[ci[1]],
+      c2 = colors[ci[2]],
+      c3 = colors[ci[3]];
+    const bRow = getB(splitYBy),
+      bCol = getB(splitXBy);
+    for (let row = 0; row <= splitYBy; row++) {
+      cl[0] = (c0[0] * (splitYBy - row) + c2[0] * row) / splitYBy | 0;
+      cl[1] = (c0[1] * (splitYBy - row) + c2[1] * row) / splitYBy | 0;
+      cl[2] = (c0[2] * (splitYBy - row) + c2[2] * row) / splitYBy | 0;
+      cr[0] = (c1[0] * (splitYBy - row) + c3[0] * row) / splitYBy | 0;
+      cr[1] = (c1[1] * (splitYBy - row) + c3[1] * row) / splitYBy | 0;
+      cr[2] = (c1[2] * (splitYBy - row) + c3[2] * row) / splitYBy | 0;
+      for (let col = 0; col <= splitXBy; col++, k++) {
+        if ((row === 0 || row === splitYBy) && (col === 0 || col === splitXBy)) {
+          continue;
+        }
+        let x = 0,
+          y = 0;
+        let q = 0;
+        for (let i = 0; i <= 3; i++) {
+          for (let j = 0; j <= 3; j++, q++) {
+            const m = bRow[row][i] * bCol[col][j];
+            x += coords[pi[q]][0] * m;
+            y += coords[pi[q]][1] * m;
+          }
+        }
+        figureCoords[k] = coords.length;
+        coords.push([x, y]);
+        figureColors[k] = colors.length;
+        const newColor = new Uint8Array(3);
+        newColor[0] = (cl[0] * (splitXBy - col) + cr[0] * col) / splitXBy | 0;
+        newColor[1] = (cl[1] * (splitXBy - col) + cr[1] * col) / splitXBy | 0;
+        newColor[2] = (cl[2] * (splitXBy - col) + cr[2] * col) / splitXBy | 0;
+        colors.push(newColor);
+      }
+    }
+    figureCoords[0] = pi[0];
+    figureColors[0] = ci[0];
+    figureCoords[splitXBy] = pi[3];
+    figureColors[splitXBy] = ci[1];
+    figureCoords[verticesPerRow * splitYBy] = pi[12];
+    figureColors[verticesPerRow * splitYBy] = ci[2];
+    figureCoords[verticesPerRow * splitYBy + splitXBy] = pi[15];
+    figureColors[verticesPerRow * splitYBy + splitXBy] = ci[3];
+    this.figures[index] = {
+      type: MeshFigureType.LATTICE,
+      coords: figureCoords,
+      colors: figureColors,
+      verticesPerRow
+    };
+  }
+  _updateBounds() {
+    meshUpdateBounds(this);
+  }
+  _packData() {
+    meshPackData(this);
+  }
+  getIR() {
+    return ["Mesh", this.shadingType, this.coords, this.colors, this.figures, this.bounds, this.bbox, this.background];
+  }
+}
+class DummyShading extends BaseShading {
+  getIR() {
+    return ["Dummy"];
+  }
+}
+function getTilingPatternIR(operatorList, dict, color) {
+  const matrix = lookupMatrix(dict.getArray("Matrix"), IDENTITY_MATRIX);
+  const bbox = lookupNormalRect(dict.getArray("BBox"), null);
+  if (!bbox || bbox[2] - bbox[0] === 0 || bbox[3] - bbox[1] === 0) {
+    throw new FormatError(`Invalid getTilingPatternIR /BBox array.`);
+  }
+  const xstep = dict.get("XStep");
+  if (typeof xstep !== "number") {
+    throw new FormatError(`Invalid getTilingPatternIR /XStep value.`);
+  }
+  const ystep = dict.get("YStep");
+  if (typeof ystep !== "number") {
+    throw new FormatError(`Invalid getTilingPatternIR /YStep value.`);
+  }
+  const paintType = dict.get("PaintType");
+  if (!Number.isInteger(paintType)) {
+    throw new FormatError(`Invalid getTilingPatternIR /PaintType value.`);
+  }
+  const tilingType = dict.get("TilingType");
+  if (!Number.isInteger(tilingType)) {
+    throw new FormatError(`Invalid getTilingPatternIR /TilingType value.`);
+  }
+  return ["TilingPattern", color, operatorList, matrix, bbox, xstep, ystep, paintType, tilingType];
 }
 
 ;// ./src/core/binary_cmap.js
@@ -19884,7 +20779,7 @@ class CFFParser {
   }
   parse() {
     const properties = this.properties;
-    const cff = new CFF();
+    const cff = new CFF(this.bytes.length);
     this.cff = cff;
     const header = this.parseHeader();
     const nameIndex = this.parseIndex(header.endPos);
@@ -20490,6 +21385,9 @@ class CFF {
   fdSelect = null;
   isCIDFont = false;
   charStringCount = 0;
+  constructor(rawFileLength = 0) {
+    this.rawFileLength = rawFileLength;
+  }
   duplicateFirstGlyph() {
     if (this.charStrings.count >= 65535) {
       warn("Not enough space in charstrings to duplicate first glyph.");
@@ -20732,24 +21630,50 @@ class CFFOffsetTracker {
     }
   }
 }
+class CompilerOutput {
+  #buf;
+  #bufLength = 1024;
+  #pos = 0;
+  constructor(minLength) {
+    this.#initBuf(minLength);
+  }
+  #initBuf(minLength) {
+    while (this.#bufLength < minLength) {
+      this.#bufLength *= 2;
+    }
+    const newBuf = new Uint8Array(this.#bufLength);
+    if (this.#buf) {
+      newBuf.set(this.#buf, 0);
+    }
+    this.#buf = newBuf;
+  }
+  get data() {
+    return this.#buf.subarray(0, this.#pos);
+  }
+  get finalData() {
+    const data = this.#buf.slice(0, this.#pos);
+    this.#buf = null;
+    return data;
+  }
+  get length() {
+    return this.#pos;
+  }
+  add(data) {
+    const newPos = this.#pos + data.length;
+    if (newPos > this.#bufLength) {
+      this.#initBuf(newPos);
+    }
+    this.#buf.set(data, this.#pos);
+    this.#pos = newPos;
+  }
+}
 class CFFCompiler {
   constructor(cff) {
     this.cff = cff;
   }
   compile() {
     const cff = this.cff;
-    const output = {
-      data: [],
-      length: 0,
-      add(data) {
-        try {
-          this.data.push(...data);
-        } catch {
-          this.data = this.data.concat(data);
-        }
-        this.length = this.data.length;
-      }
-    };
+    const output = new CompilerOutput(cff.rawFileLength);
     const header = this.compileHeader(cff.header);
     output.add(header);
     const nameIndex = this.compileNameIndex(cff.names);
@@ -20806,7 +21730,7 @@ class CFFCompiler {
     }
     this.compilePrivateDicts([cff.topDict], [topDictTracker], output);
     output.add([0]);
-    return output.data;
+    return output.finalData;
   }
   encodeNumber(value) {
     if (Number.isInteger(value)) {
@@ -21006,7 +21930,6 @@ class CFFCompiler {
     } else {
       const length = 1 + numGlyphsLessNotDef * 2;
       out = new Uint8Array(length);
-      out[0] = 0;
       let charsetIndex = 0;
       const numCharsets = charset.charset.length;
       let warned = false;
@@ -21027,10 +21950,10 @@ class CFFCompiler {
         out[i + 1] = sid & 0xff;
       }
     }
-    return this.compileTypedArray(out);
+    return out;
   }
   compileEncoding(encoding) {
-    return this.compileTypedArray(encoding.raw);
+    return encoding.raw;
   }
   compileFDSelect(fdSelect) {
     const format = fdSelect.format;
@@ -21061,10 +21984,7 @@ class CFFCompiler {
         out = new Uint8Array(ranges);
         break;
     }
-    return this.compileTypedArray(out);
-  }
-  compileTypedArray(data) {
-    return Array.from(data);
+    return out;
   }
   compileIndex(index, trackers = []) {
     const objects = index.objects;
@@ -21105,9 +22025,7 @@ class CFFCompiler {
       }
     }
     for (i = 0; i < count; i++) {
-      if (trackers[i]) {
-        trackers[i].offset(data.length);
-      }
+      trackers[i]?.offset(data.length);
       data.push(...objects[i]);
     }
     return data;
@@ -26577,10 +27495,6 @@ function writeData(dest, offset, data) {
     for (let i = 0, ii = data.length; i < ii; i++) {
       dest[offset++] = data.charCodeAt(i) & 0xff;
     }
-  } else {
-    for (const num of data) {
-      dest[offset++] = num & 0xff;
-    }
   }
 }
 const OTF_HEADER_SIZE = 12;
@@ -27316,6 +28230,7 @@ function getEexecBlock(stream, suggestedLength) {
   };
 }
 class Type1Font {
+  #rawFileLength;
   constructor(name, file, properties) {
     const PFB_HEADER_SIZE = 6;
     let headerBlockLength = properties.length1;
@@ -27339,6 +28254,7 @@ class Type1Font {
     for (const key in data.properties) {
       properties[key] = data.properties[key];
     }
+    this.#rawFileLength = headerBlock.length + eexecBlock.length;
     const charstrings = data.charstrings;
     const type2Charstrings = this.getType2Charstrings(charstrings);
     const subrs = this.getType2Subrs(data.subrs);
@@ -27433,7 +28349,7 @@ class Type1Font {
     return type2Subrs;
   }
   wrap(name, glyphs, charstrings, subrs, properties) {
-    const cff = new CFF();
+    const cff = new CFF(this.#rawFileLength);
     cff.header = new CFFHeader(1, 0, 4, 4);
     cff.names = [name];
     const topDict = new CFFTopDict();
@@ -28868,7 +29784,7 @@ class Font {
         data[2] = 0;
         data[3] = 0;
       }
-      const indexToLocFormat = int16(data[50], data[51]);
+      const indexToLocFormat = signedInt16(data[50], data[51]);
       if (indexToLocFormat < 0 || indexToLocFormat > 1) {
         info("Attempting to fix invalid indexToLocFormat in head table: " + indexToLocFormat);
         const numGlyphsPlusOne = numGlyphs + 1;
@@ -29139,7 +30055,7 @@ class Font {
           } else {
             for (j = 0; j < n; j++) {
               b = data[i++];
-              stack.push(b << 8 | data[i++]);
+              stack.push(signedInt16(b, data[i++]));
             }
           }
         } else if ((op & 0xf8) === 0xb0) {
@@ -29987,902 +30903,6 @@ class ErrorFont {
   }
 }
 
-;// ./src/core/pattern.js
-
-
-
-
-const ShadingType = {
-  FUNCTION_BASED: 1,
-  AXIAL: 2,
-  RADIAL: 3,
-  FREE_FORM_MESH: 4,
-  LATTICE_FORM_MESH: 5,
-  COONS_PATCH_MESH: 6,
-  TENSOR_PATCH_MESH: 7
-};
-class Pattern {
-  constructor() {
-    unreachable("Cannot initialize Pattern.");
-  }
-  static parseShading(shading, xref, res, pdfFunctionFactory, globalColorSpaceCache, localColorSpaceCache, prepareWebGPU = null) {
-    const dict = shading instanceof BaseStream ? shading.dict : shading;
-    const type = dict.get("ShadingType");
-    try {
-      switch (type) {
-        case ShadingType.FUNCTION_BASED:
-          prepareWebGPU?.();
-          return new FunctionBasedShading(dict, xref, res, pdfFunctionFactory, globalColorSpaceCache, localColorSpaceCache);
-        case ShadingType.AXIAL:
-        case ShadingType.RADIAL:
-          return new RadialAxialShading(dict, xref, res, pdfFunctionFactory, globalColorSpaceCache, localColorSpaceCache);
-        case ShadingType.FREE_FORM_MESH:
-        case ShadingType.LATTICE_FORM_MESH:
-        case ShadingType.COONS_PATCH_MESH:
-        case ShadingType.TENSOR_PATCH_MESH:
-          prepareWebGPU?.();
-          return new MeshShading(shading, xref, res, pdfFunctionFactory, globalColorSpaceCache, localColorSpaceCache);
-        default:
-          throw new FormatError("Unsupported ShadingType: " + type);
-      }
-    } catch (ex) {
-      if (ex instanceof MissingDataException) {
-        throw ex;
-      }
-      warn(ex);
-      return new DummyShading();
-    }
-  }
-}
-class BaseShading {
-  static SMALL_NUMBER = 1e-6;
-  getIR() {
-    unreachable("Abstract method `getIR` called.");
-  }
-}
-class RadialAxialShading extends BaseShading {
-  constructor(dict, xref, resources, pdfFunctionFactory, globalColorSpaceCache, localColorSpaceCache) {
-    super();
-    this.shadingType = dict.get("ShadingType");
-    let coordsLen = 0;
-    if (this.shadingType === ShadingType.AXIAL) {
-      coordsLen = 4;
-    } else if (this.shadingType === ShadingType.RADIAL) {
-      coordsLen = 6;
-    }
-    this.coordsArr = dict.getArray("Coords");
-    if (!isNumberArray(this.coordsArr, coordsLen)) {
-      throw new FormatError("RadialAxialShading: Invalid /Coords array.");
-    }
-    const cs = ColorSpaceUtils.parse({
-      cs: dict.getRaw("CS") || dict.getRaw("ColorSpace"),
-      xref,
-      resources,
-      pdfFunctionFactory,
-      globalColorSpaceCache,
-      localColorSpaceCache
-    });
-    this.bbox = lookupNormalRect(dict.getArray("BBox"), null);
-    let t0 = 0.0,
-      t1 = 1.0;
-    const domainArr = dict.getArray("Domain");
-    if (isNumberArray(domainArr, 2)) {
-      [t0, t1] = domainArr;
-    }
-    let extendStart = false,
-      extendEnd = false;
-    const extendArr = dict.getArray("Extend");
-    if (isBooleanArray(extendArr, 2)) {
-      [extendStart, extendEnd] = extendArr;
-    }
-    this.extendStart = extendStart;
-    this.extendEnd = extendEnd;
-    const fnObj = dict.getRaw("Function");
-    const fn = pdfFunctionFactory.create(fnObj, true);
-    const NUMBER_OF_SAMPLES = 840;
-    const step = (t1 - t0) / NUMBER_OF_SAMPLES;
-    const colorStops = this.colorStops = [];
-    if (t0 >= t1 || step <= 0) {
-      info("Bad shading domain.");
-      return;
-    }
-    const color = new Float32Array(cs.numComps),
-      ratio = new Float32Array(1);
-    let iBase = 0;
-    ratio[0] = t0;
-    fn(ratio, 0, color, 0);
-    const rgbBuffer = new Uint8ClampedArray(3);
-    cs.getRgb(color, 0, rgbBuffer);
-    let [rBase, gBase, bBase] = rgbBuffer;
-    colorStops.push([0, Util.makeHexColor(rBase, gBase, bBase)]);
-    let iPrev = 1;
-    ratio[0] = t0 + step;
-    fn(ratio, 0, color, 0);
-    cs.getRgb(color, 0, rgbBuffer);
-    let [rPrev, gPrev, bPrev] = rgbBuffer;
-    let maxSlopeR = rPrev - rBase + 1;
-    let maxSlopeG = gPrev - gBase + 1;
-    let maxSlopeB = bPrev - bBase + 1;
-    let minSlopeR = rPrev - rBase - 1;
-    let minSlopeG = gPrev - gBase - 1;
-    let minSlopeB = bPrev - bBase - 1;
-    for (let i = 2; i < NUMBER_OF_SAMPLES; i++) {
-      ratio[0] = t0 + i * step;
-      fn(ratio, 0, color, 0);
-      cs.getRgb(color, 0, rgbBuffer);
-      const [r, g, b] = rgbBuffer;
-      const run = i - iBase;
-      maxSlopeR = Math.min(maxSlopeR, (r - rBase + 1) / run);
-      maxSlopeG = Math.min(maxSlopeG, (g - gBase + 1) / run);
-      maxSlopeB = Math.min(maxSlopeB, (b - bBase + 1) / run);
-      minSlopeR = Math.max(minSlopeR, (r - rBase - 1) / run);
-      minSlopeG = Math.max(minSlopeG, (g - gBase - 1) / run);
-      minSlopeB = Math.max(minSlopeB, (b - bBase - 1) / run);
-      const slopesExist = minSlopeR <= maxSlopeR && minSlopeG <= maxSlopeG && minSlopeB <= maxSlopeB;
-      if (!slopesExist) {
-        const cssColor = Util.makeHexColor(rPrev, gPrev, bPrev);
-        colorStops.push([iPrev / NUMBER_OF_SAMPLES, cssColor]);
-        maxSlopeR = r - rPrev + 1;
-        maxSlopeG = g - gPrev + 1;
-        maxSlopeB = b - bPrev + 1;
-        minSlopeR = r - rPrev - 1;
-        minSlopeG = g - gPrev - 1;
-        minSlopeB = b - bPrev - 1;
-        iBase = iPrev;
-        rBase = rPrev;
-        gBase = gPrev;
-        bBase = bPrev;
-      }
-      iPrev = i;
-      rPrev = r;
-      gPrev = g;
-      bPrev = b;
-    }
-    colorStops.push([1, Util.makeHexColor(rPrev, gPrev, bPrev)]);
-    let background = "transparent";
-    if (dict.has("Background")) {
-      background = cs.getRgbHex(dict.get("Background"), 0);
-    }
-    if (!extendStart) {
-      colorStops.unshift([0, background]);
-      colorStops[1][0] += BaseShading.SMALL_NUMBER;
-    }
-    if (!extendEnd) {
-      colorStops.at(-1)[0] -= BaseShading.SMALL_NUMBER;
-      colorStops.push([1, background]);
-    }
-    this.colorStops = colorStops;
-  }
-  getIR() {
-    const {
-      coordsArr,
-      shadingType
-    } = this;
-    let type, p0, p1, r0, r1;
-    if (shadingType === ShadingType.AXIAL) {
-      p0 = [coordsArr[0], coordsArr[1]];
-      p1 = [coordsArr[2], coordsArr[3]];
-      r0 = null;
-      r1 = null;
-      type = "axial";
-    } else if (shadingType === ShadingType.RADIAL) {
-      p0 = [coordsArr[0], coordsArr[1]];
-      p1 = [coordsArr[3], coordsArr[4]];
-      r0 = coordsArr[2];
-      r1 = coordsArr[5];
-      type = "radial";
-    } else {
-      unreachable(`getPattern type unknown: ${shadingType}`);
-    }
-    return ["RadialAxial", type, this.bbox, this.colorStops, p0, p1, r0, r1];
-  }
-}
-function meshUpdateBounds(self) {
-  let minX = self.coords[0][0],
-    minY = self.coords[0][1],
-    maxX = minX,
-    maxY = minY;
-  for (let i = 1, ii = self.coords.length; i < ii; i++) {
-    const x = self.coords[i][0],
-      y = self.coords[i][1];
-    minX = minX > x ? x : minX;
-    minY = minY > y ? y : minY;
-    maxX = maxX < x ? x : maxX;
-    maxY = maxY < y ? y : maxY;
-  }
-  self.bounds = [minX, minY, maxX, maxY];
-}
-function meshPackData(self) {
-  let i, j, ii;
-  const coords = self.coords;
-  const coordsPacked = new Float32Array(coords.length * 2);
-  for (i = 0, j = 0, ii = coords.length; i < ii; i++) {
-    const xy = coords[i];
-    coordsPacked[j++] = xy[0];
-    coordsPacked[j++] = xy[1];
-  }
-  self.coords = coordsPacked;
-  const colors = self.colors;
-  const colorsPacked = new Uint8Array(colors.length * 4);
-  for (i = 0, j = 0, ii = colors.length; i < ii; i++) {
-    const c = colors[i];
-    colorsPacked[j++] = c[0];
-    colorsPacked[j++] = c[1];
-    colorsPacked[j++] = c[2];
-    j++;
-  }
-  self.colors = colorsPacked;
-  for (const figure of self.figures) {
-    figure.coords = new Uint32Array(figure.coords);
-    figure.colors = new Uint32Array(figure.colors);
-  }
-}
-class FunctionBasedShading extends BaseShading {
-  static MAX_STEP_COUNT = 512;
-  constructor(dict, xref, resources, pdfFunctionFactory, globalColorSpaceCache, localColorSpaceCache) {
-    super();
-    this.bbox = lookupNormalRect(dict.getArray("BBox"), null);
-    const cs = ColorSpaceUtils.parse({
-      cs: dict.getRaw("CS") || dict.getRaw("ColorSpace"),
-      xref,
-      resources,
-      pdfFunctionFactory,
-      globalColorSpaceCache,
-      localColorSpaceCache
-    });
-    this.background = dict.has("Background") ? cs.getRgb(dict.get("Background"), 0) : null;
-    const fnObj = dict.getRaw("Function");
-    if (!fnObj) {
-      throw new FormatError("FunctionBasedShading: missing /Function");
-    }
-    const fn = pdfFunctionFactory.create(fnObj, true);
-    let x0 = 0,
-      x1 = 1,
-      y0 = 0,
-      y1 = 1;
-    const domainArr = lookupRect(dict.getArray("Domain"), null);
-    if (domainArr) {
-      [x0, x1, y0, y1] = domainArr;
-    }
-    const matrix = lookupMatrix(dict.getArray("Matrix"), IDENTITY_MATRIX);
-    this.bounds = [Infinity, Infinity, -Infinity, -Infinity];
-    Util.axialAlignedBoundingBox([x0, y0, x1, y1], matrix, this.bounds);
-    const bboxW = this.bounds[2] - this.bounds[0];
-    const bboxH = this.bounds[3] - this.bounds[1];
-    const stepsX = MathClamp(Math.ceil(bboxW), 1, FunctionBasedShading.MAX_STEP_COUNT);
-    const stepsY = MathClamp(Math.ceil(bboxH), 1, FunctionBasedShading.MAX_STEP_COUNT);
-    const verticesPerRow = stepsX + 1;
-    const totalVertices = (stepsY + 1) * verticesPerRow;
-    const coords = this.coords = new Float32Array(totalVertices * 2);
-    const colors = this.colors = new Uint8ClampedArray(totalVertices * 4);
-    const xyBuf = new Float32Array(2);
-    const colorBuf = new Float32Array(cs.numComps);
-    const rangeX = (x1 - x0) / stepsX;
-    const rangeY = (y1 - y0) / stepsY;
-    const halfStepX = rangeX / 2;
-    const halfStepY = rangeY / 2;
-    let coordOffset = 0;
-    let colorOffset = 0;
-    for (let row = 0; row <= stepsY; row++) {
-      const yDomain = y0 + rangeY * row;
-      xyBuf[1] = row === stepsY ? yDomain - halfStepY : yDomain;
-      for (let col = 0; col <= stepsX; col++) {
-        const xDomain = x0 + rangeX * col;
-        xyBuf[0] = col === stepsX ? xDomain - halfStepX : xDomain;
-        fn(xyBuf, 0, colorBuf, 0);
-        coords[coordOffset] = xDomain;
-        coords[coordOffset + 1] = yDomain;
-        Util.applyTransform(coords, matrix, coordOffset);
-        coordOffset += 2;
-        cs.getRgbItem(colorBuf, 0, colors, colorOffset);
-        colorOffset += 4;
-      }
-    }
-    const ps = new Uint32Array(totalVertices);
-    for (let i = 0; i < totalVertices; i++) {
-      ps[i] = i;
-    }
-    this.figures = [{
-      type: MeshFigureType.LATTICE,
-      coords: ps,
-      colors: new Uint32Array(ps),
-      verticesPerRow
-    }];
-  }
-  getIR() {
-    return ["Mesh", ShadingType.FUNCTION_BASED, this.coords, this.colors, this.figures, this.bounds, this.bbox, this.background];
-  }
-}
-class MeshStreamReader {
-  constructor(stream, context) {
-    this.stream = stream;
-    this.context = context;
-    this.buffer = 0;
-    this.bufferLength = 0;
-    const numComps = context.numComps;
-    this.tmpCompsBuf = new Float32Array(numComps);
-    const csNumComps = context.colorSpace.numComps;
-    this.tmpCsCompsBuf = context.colorFn ? new Float32Array(csNumComps) : this.tmpCompsBuf;
-  }
-  get hasData() {
-    if (this.stream.end) {
-      return this.stream.pos < this.stream.end;
-    }
-    if (this.bufferLength > 0) {
-      return true;
-    }
-    const nextByte = this.stream.getByte();
-    if (nextByte < 0) {
-      return false;
-    }
-    this.buffer = nextByte;
-    this.bufferLength = 8;
-    return true;
-  }
-  readBits(n) {
-    const {
-      stream
-    } = this;
-    let {
-      buffer,
-      bufferLength
-    } = this;
-    if (n === 32) {
-      if (bufferLength === 0) {
-        return stream.getInt32() >>> 0;
-      }
-      buffer = buffer << 24 | stream.getByte() << 16 | stream.getByte() << 8 | stream.getByte();
-      const nextByte = stream.getByte();
-      this.buffer = nextByte & (1 << bufferLength) - 1;
-      return (buffer << 8 - bufferLength | (nextByte & 0xff) >> bufferLength) >>> 0;
-    }
-    if (n === 8 && bufferLength === 0) {
-      return stream.getByte();
-    }
-    while (bufferLength < n) {
-      buffer = buffer << 8 | stream.getByte();
-      bufferLength += 8;
-    }
-    bufferLength -= n;
-    this.bufferLength = bufferLength;
-    this.buffer = buffer & (1 << bufferLength) - 1;
-    return buffer >> bufferLength;
-  }
-  align() {
-    this.buffer = 0;
-    this.bufferLength = 0;
-  }
-  readFlag() {
-    return this.readBits(this.context.bitsPerFlag);
-  }
-  readCoordinate() {
-    const {
-      bitsPerCoordinate,
-      decode
-    } = this.context;
-    const xi = this.readBits(bitsPerCoordinate);
-    const yi = this.readBits(bitsPerCoordinate);
-    const scale = bitsPerCoordinate < 32 ? 1 / ((1 << bitsPerCoordinate) - 1) : 2.3283064365386963e-10;
-    return [xi * scale * (decode[1] - decode[0]) + decode[0], yi * scale * (decode[3] - decode[2]) + decode[2]];
-  }
-  readComponents() {
-    const {
-      bitsPerComponent,
-      colorFn,
-      colorSpace,
-      decode,
-      numComps
-    } = this.context;
-    const scale = bitsPerComponent < 32 ? 1 / ((1 << bitsPerComponent) - 1) : 2.3283064365386963e-10;
-    const components = this.tmpCompsBuf;
-    for (let i = 0, j = 4; i < numComps; i++, j += 2) {
-      const ci = this.readBits(bitsPerComponent);
-      components[i] = ci * scale * (decode[j + 1] - decode[j]) + decode[j];
-    }
-    const color = this.tmpCsCompsBuf;
-    colorFn?.(components, 0, color, 0);
-    return colorSpace.getRgb(color, 0);
-  }
-}
-let bCache = Object.create(null);
-function buildB(count) {
-  const lut = [];
-  for (let i = 0; i <= count; i++) {
-    const t = i / count,
-      t_ = 1 - t;
-    lut.push(new Float32Array([t_ ** 3, 3 * t * t_ ** 2, 3 * t ** 2 * t_, t ** 3]));
-  }
-  return lut;
-}
-function getB(count) {
-  return bCache[count] ||= buildB(count);
-}
-function clearPatternCaches() {
-  bCache = Object.create(null);
-}
-class MeshShading extends BaseShading {
-  static MIN_SPLIT_PATCH_CHUNKS_AMOUNT = 3;
-  static MAX_SPLIT_PATCH_CHUNKS_AMOUNT = 20;
-  static TRIANGLE_DENSITY = 20;
-  constructor(stream, xref, resources, pdfFunctionFactory, globalColorSpaceCache, localColorSpaceCache) {
-    super();
-    if (!(stream instanceof BaseStream)) {
-      throw new FormatError("Mesh data is not a stream");
-    }
-    const dict = stream.dict;
-    this.shadingType = dict.get("ShadingType");
-    this.bbox = lookupNormalRect(dict.getArray("BBox"), null);
-    const cs = ColorSpaceUtils.parse({
-      cs: dict.getRaw("CS") || dict.getRaw("ColorSpace"),
-      xref,
-      resources,
-      pdfFunctionFactory,
-      globalColorSpaceCache,
-      localColorSpaceCache
-    });
-    this.background = dict.has("Background") ? cs.getRgb(dict.get("Background"), 0) : null;
-    const fnObj = dict.getRaw("Function");
-    const fn = fnObj ? pdfFunctionFactory.create(fnObj, true) : null;
-    this.coords = [];
-    this.colors = [];
-    this.figures = [];
-    const decodeContext = {
-      bitsPerCoordinate: dict.get("BitsPerCoordinate"),
-      bitsPerComponent: dict.get("BitsPerComponent"),
-      bitsPerFlag: dict.get("BitsPerFlag"),
-      decode: dict.getArray("Decode"),
-      colorFn: fn,
-      colorSpace: cs,
-      numComps: fn ? 1 : cs.numComps
-    };
-    const reader = new MeshStreamReader(stream, decodeContext);
-    let patchMesh = false;
-    switch (this.shadingType) {
-      case ShadingType.FREE_FORM_MESH:
-        this._decodeType4Shading(reader);
-        break;
-      case ShadingType.LATTICE_FORM_MESH:
-        const verticesPerRow = dict.get("VerticesPerRow") | 0;
-        if (verticesPerRow < 2) {
-          throw new FormatError("Invalid VerticesPerRow");
-        }
-        this._decodeType5Shading(reader, verticesPerRow);
-        break;
-      case ShadingType.COONS_PATCH_MESH:
-        this._decodeType6Shading(reader);
-        patchMesh = true;
-        break;
-      case ShadingType.TENSOR_PATCH_MESH:
-        this._decodeType7Shading(reader);
-        patchMesh = true;
-        break;
-      default:
-        unreachable("Unsupported mesh type.");
-        break;
-    }
-    if (patchMesh) {
-      this._updateBounds();
-      for (let i = 0, ii = this.figures.length; i < ii; i++) {
-        this._buildFigureFromPatch(i);
-      }
-    }
-    this._updateBounds();
-    this._packData();
-  }
-  _decodeType4Shading(reader) {
-    const coords = this.coords;
-    const colors = this.colors;
-    const operators = [];
-    const ps = [];
-    let verticesLeft = 0;
-    while (reader.hasData) {
-      const f = reader.readFlag();
-      const coord = reader.readCoordinate();
-      const color = reader.readComponents();
-      if (verticesLeft === 0) {
-        if (!(0 <= f && f <= 2)) {
-          throw new FormatError("Unknown type4 flag");
-        }
-        switch (f) {
-          case 0:
-            verticesLeft = 3;
-            break;
-          case 1:
-            ps.push(ps.at(-2), ps.at(-1));
-            verticesLeft = 1;
-            break;
-          case 2:
-            ps.push(ps.at(-3), ps.at(-1));
-            verticesLeft = 1;
-            break;
-        }
-        operators.push(f);
-      }
-      ps.push(coords.length);
-      coords.push(coord);
-      colors.push(color);
-      verticesLeft--;
-      reader.align();
-    }
-    this.figures.push({
-      type: MeshFigureType.TRIANGLES,
-      coords: new Int32Array(ps),
-      colors: new Int32Array(ps)
-    });
-  }
-  _decodeType5Shading(reader, verticesPerRow) {
-    const coords = this.coords;
-    const colors = this.colors;
-    const ps = [];
-    while (reader.hasData) {
-      const coord = reader.readCoordinate();
-      const color = reader.readComponents();
-      ps.push(coords.length);
-      coords.push(coord);
-      colors.push(color);
-    }
-    this.figures.push({
-      type: MeshFigureType.LATTICE,
-      coords: new Int32Array(ps),
-      colors: new Int32Array(ps),
-      verticesPerRow
-    });
-  }
-  _decodeType6Shading(reader) {
-    const coords = this.coords;
-    const colors = this.colors;
-    const ps = new Int32Array(16);
-    const cs = new Int32Array(4);
-    while (reader.hasData) {
-      const f = reader.readFlag();
-      if (!(0 <= f && f <= 3)) {
-        throw new FormatError("Unknown type6 flag");
-      }
-      const pi = coords.length;
-      for (let i = 0, ii = f !== 0 ? 8 : 12; i < ii; i++) {
-        coords.push(reader.readCoordinate());
-      }
-      const ci = colors.length;
-      for (let i = 0, ii = f !== 0 ? 2 : 4; i < ii; i++) {
-        colors.push(reader.readComponents());
-      }
-      let tmp1, tmp2, tmp3, tmp4;
-      switch (f) {
-        case 0:
-          ps[12] = pi + 3;
-          ps[13] = pi + 4;
-          ps[14] = pi + 5;
-          ps[15] = pi + 6;
-          ps[8] = pi + 2;
-          ps[11] = pi + 7;
-          ps[4] = pi + 1;
-          ps[7] = pi + 8;
-          ps[0] = pi;
-          ps[1] = pi + 11;
-          ps[2] = pi + 10;
-          ps[3] = pi + 9;
-          cs[2] = ci + 1;
-          cs[3] = ci + 2;
-          cs[0] = ci;
-          cs[1] = ci + 3;
-          break;
-        case 1:
-          tmp1 = ps[12];
-          tmp2 = ps[13];
-          tmp3 = ps[14];
-          tmp4 = ps[15];
-          ps[12] = tmp4;
-          ps[13] = pi + 0;
-          ps[14] = pi + 1;
-          ps[15] = pi + 2;
-          ps[8] = tmp3;
-          ps[11] = pi + 3;
-          ps[4] = tmp2;
-          ps[7] = pi + 4;
-          ps[0] = tmp1;
-          ps[1] = pi + 7;
-          ps[2] = pi + 6;
-          ps[3] = pi + 5;
-          tmp1 = cs[2];
-          tmp2 = cs[3];
-          cs[2] = tmp2;
-          cs[3] = ci;
-          cs[0] = tmp1;
-          cs[1] = ci + 1;
-          break;
-        case 2:
-          tmp1 = ps[15];
-          tmp2 = ps[11];
-          ps[12] = ps[3];
-          ps[13] = pi + 0;
-          ps[14] = pi + 1;
-          ps[15] = pi + 2;
-          ps[8] = ps[7];
-          ps[11] = pi + 3;
-          ps[4] = tmp2;
-          ps[7] = pi + 4;
-          ps[0] = tmp1;
-          ps[1] = pi + 7;
-          ps[2] = pi + 6;
-          ps[3] = pi + 5;
-          tmp1 = cs[3];
-          cs[2] = cs[1];
-          cs[3] = ci;
-          cs[0] = tmp1;
-          cs[1] = ci + 1;
-          break;
-        case 3:
-          ps[12] = ps[0];
-          ps[13] = pi + 0;
-          ps[14] = pi + 1;
-          ps[15] = pi + 2;
-          ps[8] = ps[1];
-          ps[11] = pi + 3;
-          ps[4] = ps[2];
-          ps[7] = pi + 4;
-          ps[0] = ps[3];
-          ps[1] = pi + 7;
-          ps[2] = pi + 6;
-          ps[3] = pi + 5;
-          cs[2] = cs[0];
-          cs[3] = ci;
-          cs[0] = cs[1];
-          cs[1] = ci + 1;
-          break;
-      }
-      ps[5] = coords.length;
-      coords.push([(-4 * coords[ps[0]][0] - coords[ps[15]][0] + 6 * (coords[ps[4]][0] + coords[ps[1]][0]) - 2 * (coords[ps[12]][0] + coords[ps[3]][0]) + 3 * (coords[ps[13]][0] + coords[ps[7]][0])) / 9, (-4 * coords[ps[0]][1] - coords[ps[15]][1] + 6 * (coords[ps[4]][1] + coords[ps[1]][1]) - 2 * (coords[ps[12]][1] + coords[ps[3]][1]) + 3 * (coords[ps[13]][1] + coords[ps[7]][1])) / 9]);
-      ps[6] = coords.length;
-      coords.push([(-4 * coords[ps[3]][0] - coords[ps[12]][0] + 6 * (coords[ps[2]][0] + coords[ps[7]][0]) - 2 * (coords[ps[0]][0] + coords[ps[15]][0]) + 3 * (coords[ps[4]][0] + coords[ps[14]][0])) / 9, (-4 * coords[ps[3]][1] - coords[ps[12]][1] + 6 * (coords[ps[2]][1] + coords[ps[7]][1]) - 2 * (coords[ps[0]][1] + coords[ps[15]][1]) + 3 * (coords[ps[4]][1] + coords[ps[14]][1])) / 9]);
-      ps[9] = coords.length;
-      coords.push([(-4 * coords[ps[12]][0] - coords[ps[3]][0] + 6 * (coords[ps[8]][0] + coords[ps[13]][0]) - 2 * (coords[ps[0]][0] + coords[ps[15]][0]) + 3 * (coords[ps[11]][0] + coords[ps[1]][0])) / 9, (-4 * coords[ps[12]][1] - coords[ps[3]][1] + 6 * (coords[ps[8]][1] + coords[ps[13]][1]) - 2 * (coords[ps[0]][1] + coords[ps[15]][1]) + 3 * (coords[ps[11]][1] + coords[ps[1]][1])) / 9]);
-      ps[10] = coords.length;
-      coords.push([(-4 * coords[ps[15]][0] - coords[ps[0]][0] + 6 * (coords[ps[11]][0] + coords[ps[14]][0]) - 2 * (coords[ps[12]][0] + coords[ps[3]][0]) + 3 * (coords[ps[2]][0] + coords[ps[8]][0])) / 9, (-4 * coords[ps[15]][1] - coords[ps[0]][1] + 6 * (coords[ps[11]][1] + coords[ps[14]][1]) - 2 * (coords[ps[12]][1] + coords[ps[3]][1]) + 3 * (coords[ps[2]][1] + coords[ps[8]][1])) / 9]);
-      this.figures.push({
-        type: MeshFigureType.PATCH,
-        coords: new Int32Array(ps),
-        colors: new Int32Array(cs)
-      });
-    }
-  }
-  _decodeType7Shading(reader) {
-    const coords = this.coords;
-    const colors = this.colors;
-    const ps = new Int32Array(16);
-    const cs = new Int32Array(4);
-    while (reader.hasData) {
-      const f = reader.readFlag();
-      if (!(0 <= f && f <= 3)) {
-        throw new FormatError("Unknown type7 flag");
-      }
-      const pi = coords.length;
-      for (let i = 0, ii = f !== 0 ? 12 : 16; i < ii; i++) {
-        coords.push(reader.readCoordinate());
-      }
-      const ci = colors.length;
-      for (let i = 0, ii = f !== 0 ? 2 : 4; i < ii; i++) {
-        colors.push(reader.readComponents());
-      }
-      let tmp1, tmp2, tmp3, tmp4;
-      switch (f) {
-        case 0:
-          ps[12] = pi + 3;
-          ps[13] = pi + 4;
-          ps[14] = pi + 5;
-          ps[15] = pi + 6;
-          ps[8] = pi + 2;
-          ps[9] = pi + 13;
-          ps[10] = pi + 14;
-          ps[11] = pi + 7;
-          ps[4] = pi + 1;
-          ps[5] = pi + 12;
-          ps[6] = pi + 15;
-          ps[7] = pi + 8;
-          ps[0] = pi;
-          ps[1] = pi + 11;
-          ps[2] = pi + 10;
-          ps[3] = pi + 9;
-          cs[2] = ci + 1;
-          cs[3] = ci + 2;
-          cs[0] = ci;
-          cs[1] = ci + 3;
-          break;
-        case 1:
-          tmp1 = ps[12];
-          tmp2 = ps[13];
-          tmp3 = ps[14];
-          tmp4 = ps[15];
-          ps[12] = tmp4;
-          ps[13] = pi + 0;
-          ps[14] = pi + 1;
-          ps[15] = pi + 2;
-          ps[8] = tmp3;
-          ps[9] = pi + 9;
-          ps[10] = pi + 10;
-          ps[11] = pi + 3;
-          ps[4] = tmp2;
-          ps[5] = pi + 8;
-          ps[6] = pi + 11;
-          ps[7] = pi + 4;
-          ps[0] = tmp1;
-          ps[1] = pi + 7;
-          ps[2] = pi + 6;
-          ps[3] = pi + 5;
-          tmp1 = cs[2];
-          tmp2 = cs[3];
-          cs[2] = tmp2;
-          cs[3] = ci;
-          cs[0] = tmp1;
-          cs[1] = ci + 1;
-          break;
-        case 2:
-          tmp1 = ps[15];
-          tmp2 = ps[11];
-          ps[12] = ps[3];
-          ps[13] = pi + 0;
-          ps[14] = pi + 1;
-          ps[15] = pi + 2;
-          ps[8] = ps[7];
-          ps[9] = pi + 9;
-          ps[10] = pi + 10;
-          ps[11] = pi + 3;
-          ps[4] = tmp2;
-          ps[5] = pi + 8;
-          ps[6] = pi + 11;
-          ps[7] = pi + 4;
-          ps[0] = tmp1;
-          ps[1] = pi + 7;
-          ps[2] = pi + 6;
-          ps[3] = pi + 5;
-          tmp1 = cs[3];
-          cs[2] = cs[1];
-          cs[3] = ci;
-          cs[0] = tmp1;
-          cs[1] = ci + 1;
-          break;
-        case 3:
-          ps[12] = ps[0];
-          ps[13] = pi + 0;
-          ps[14] = pi + 1;
-          ps[15] = pi + 2;
-          ps[8] = ps[1];
-          ps[9] = pi + 9;
-          ps[10] = pi + 10;
-          ps[11] = pi + 3;
-          ps[4] = ps[2];
-          ps[5] = pi + 8;
-          ps[6] = pi + 11;
-          ps[7] = pi + 4;
-          ps[0] = ps[3];
-          ps[1] = pi + 7;
-          ps[2] = pi + 6;
-          ps[3] = pi + 5;
-          cs[2] = cs[0];
-          cs[3] = ci;
-          cs[0] = cs[1];
-          cs[1] = ci + 1;
-          break;
-      }
-      this.figures.push({
-        type: MeshFigureType.PATCH,
-        coords: new Int32Array(ps),
-        colors: new Int32Array(cs)
-      });
-    }
-  }
-  _buildFigureFromPatch(index) {
-    const figure = this.figures[index];
-    assert(figure.type === MeshFigureType.PATCH, "Unexpected patch mesh figure");
-    const coords = this.coords,
-      colors = this.colors;
-    const pi = figure.coords;
-    const ci = figure.colors;
-    const figureMinX = Math.min(coords[pi[0]][0], coords[pi[3]][0], coords[pi[12]][0], coords[pi[15]][0]);
-    const figureMinY = Math.min(coords[pi[0]][1], coords[pi[3]][1], coords[pi[12]][1], coords[pi[15]][1]);
-    const figureMaxX = Math.max(coords[pi[0]][0], coords[pi[3]][0], coords[pi[12]][0], coords[pi[15]][0]);
-    const figureMaxY = Math.max(coords[pi[0]][1], coords[pi[3]][1], coords[pi[12]][1], coords[pi[15]][1]);
-    let splitXBy = Math.ceil((figureMaxX - figureMinX) * MeshShading.TRIANGLE_DENSITY / (this.bounds[2] - this.bounds[0]));
-    splitXBy = MathClamp(splitXBy, MeshShading.MIN_SPLIT_PATCH_CHUNKS_AMOUNT, MeshShading.MAX_SPLIT_PATCH_CHUNKS_AMOUNT);
-    let splitYBy = Math.ceil((figureMaxY - figureMinY) * MeshShading.TRIANGLE_DENSITY / (this.bounds[3] - this.bounds[1]));
-    splitYBy = MathClamp(splitYBy, MeshShading.MIN_SPLIT_PATCH_CHUNKS_AMOUNT, MeshShading.MAX_SPLIT_PATCH_CHUNKS_AMOUNT);
-    const verticesPerRow = splitXBy + 1;
-    const figureCoords = new Int32Array((splitYBy + 1) * verticesPerRow);
-    const figureColors = new Int32Array((splitYBy + 1) * verticesPerRow);
-    let k = 0;
-    const cl = new Uint8Array(3),
-      cr = new Uint8Array(3);
-    const c0 = colors[ci[0]],
-      c1 = colors[ci[1]],
-      c2 = colors[ci[2]],
-      c3 = colors[ci[3]];
-    const bRow = getB(splitYBy),
-      bCol = getB(splitXBy);
-    for (let row = 0; row <= splitYBy; row++) {
-      cl[0] = (c0[0] * (splitYBy - row) + c2[0] * row) / splitYBy | 0;
-      cl[1] = (c0[1] * (splitYBy - row) + c2[1] * row) / splitYBy | 0;
-      cl[2] = (c0[2] * (splitYBy - row) + c2[2] * row) / splitYBy | 0;
-      cr[0] = (c1[0] * (splitYBy - row) + c3[0] * row) / splitYBy | 0;
-      cr[1] = (c1[1] * (splitYBy - row) + c3[1] * row) / splitYBy | 0;
-      cr[2] = (c1[2] * (splitYBy - row) + c3[2] * row) / splitYBy | 0;
-      for (let col = 0; col <= splitXBy; col++, k++) {
-        if ((row === 0 || row === splitYBy) && (col === 0 || col === splitXBy)) {
-          continue;
-        }
-        let x = 0,
-          y = 0;
-        let q = 0;
-        for (let i = 0; i <= 3; i++) {
-          for (let j = 0; j <= 3; j++, q++) {
-            const m = bRow[row][i] * bCol[col][j];
-            x += coords[pi[q]][0] * m;
-            y += coords[pi[q]][1] * m;
-          }
-        }
-        figureCoords[k] = coords.length;
-        coords.push([x, y]);
-        figureColors[k] = colors.length;
-        const newColor = new Uint8Array(3);
-        newColor[0] = (cl[0] * (splitXBy - col) + cr[0] * col) / splitXBy | 0;
-        newColor[1] = (cl[1] * (splitXBy - col) + cr[1] * col) / splitXBy | 0;
-        newColor[2] = (cl[2] * (splitXBy - col) + cr[2] * col) / splitXBy | 0;
-        colors.push(newColor);
-      }
-    }
-    figureCoords[0] = pi[0];
-    figureColors[0] = ci[0];
-    figureCoords[splitXBy] = pi[3];
-    figureColors[splitXBy] = ci[1];
-    figureCoords[verticesPerRow * splitYBy] = pi[12];
-    figureColors[verticesPerRow * splitYBy] = ci[2];
-    figureCoords[verticesPerRow * splitYBy + splitXBy] = pi[15];
-    figureColors[verticesPerRow * splitYBy + splitXBy] = ci[3];
-    this.figures[index] = {
-      type: MeshFigureType.LATTICE,
-      coords: figureCoords,
-      colors: figureColors,
-      verticesPerRow
-    };
-  }
-  _updateBounds() {
-    meshUpdateBounds(this);
-  }
-  _packData() {
-    meshPackData(this);
-  }
-  getIR() {
-    return ["Mesh", this.shadingType, this.coords, this.colors, this.figures, this.bounds, this.bbox, this.background];
-  }
-}
-class DummyShading extends BaseShading {
-  getIR() {
-    return ["Dummy"];
-  }
-}
-function getTilingPatternIR(operatorList, dict, color) {
-  const matrix = lookupMatrix(dict.getArray("Matrix"), IDENTITY_MATRIX);
-  const bbox = lookupNormalRect(dict.getArray("BBox"), null);
-  if (!bbox || bbox[2] - bbox[0] === 0 || bbox[3] - bbox[1] === 0) {
-    throw new FormatError(`Invalid getTilingPatternIR /BBox array.`);
-  }
-  const xstep = dict.get("XStep");
-  if (typeof xstep !== "number") {
-    throw new FormatError(`Invalid getTilingPatternIR /XStep value.`);
-  }
-  const ystep = dict.get("YStep");
-  if (typeof ystep !== "number") {
-    throw new FormatError(`Invalid getTilingPatternIR /YStep value.`);
-  }
-  const paintType = dict.get("PaintType");
-  if (!Number.isInteger(paintType)) {
-    throw new FormatError(`Invalid getTilingPatternIR /PaintType value.`);
-  }
-  const tilingType = dict.get("TilingType");
-  if (!Number.isInteger(tilingType)) {
-    throw new FormatError(`Invalid getTilingPatternIR /TilingType value.`);
-  }
-  return ["TilingPattern", color, operatorList, matrix, bbox, xstep, ystep, paintType, tilingType];
-}
-
 ;// ./src/core/calibri_factors.js
 const CalibriBoldFactors = [1.3877, 1, 1, 1, 0.97801, 0.92482, 0.89552, 0.91133, 0.81988, 0.97566, 0.98152, 0.93548, 0.93548, 1.2798, 0.85284, 0.92794, 1, 0.96134, 1.54657, 0.91133, 0.91133, 0.91133, 0.91133, 0.91133, 0.91133, 0.91133, 0.91133, 0.91133, 0.91133, 0.82845, 0.82845, 0.85284, 0.85284, 0.85284, 0.75859, 0.92138, 0.83908, 0.7762, 0.73293, 0.87289, 0.73133, 0.7514, 0.81921, 0.87356, 0.95958, 0.59526, 0.75727, 0.69225, 1.04924, 0.9121, 0.86943, 0.79795, 0.88198, 0.77958, 0.70864, 0.81055, 0.90399, 0.88653, 0.96017, 0.82577, 0.77892, 0.78257, 0.97507, 1.54657, 0.97507, 0.85284, 0.89552, 0.90176, 0.88762, 0.8785, 0.75241, 0.8785, 0.90518, 0.95015, 0.77618, 0.8785, 0.88401, 0.91916, 0.86304, 0.88401, 0.91488, 0.8785, 0.8801, 0.8785, 0.8785, 0.91343, 0.7173, 1.04106, 0.8785, 0.85075, 0.95794, 0.82616, 0.85162, 0.79492, 0.88331, 1.69808, 0.88331, 0.85284, 0.97801, 0.89552, 0.91133, 0.89552, 0.91133, 1.7801, 0.89552, 1.24487, 1.13254, 1.12401, 0.96839, 0.85284, 0.68787, 0.70645, 0.85592, 0.90747, 1.01466, 1.0088, 0.90323, 1, 1.07463, 1, 0.91056, 0.75806, 1.19118, 0.96839, 0.78864, 0.82845, 0.84133, 0.75859, 0.83908, 0.83908, 0.83908, 0.83908, 0.83908, 0.83908, 0.77539, 0.73293, 0.73133, 0.73133, 0.73133, 0.73133, 0.95958, 0.95958, 0.95958, 0.95958, 0.88506, 0.9121, 0.86943, 0.86943, 0.86943, 0.86943, 0.86943, 0.85284, 0.87508, 0.90399, 0.90399, 0.90399, 0.90399, 0.77892, 0.79795, 0.90807, 0.88762, 0.88762, 0.88762, 0.88762, 0.88762, 0.88762, 0.8715, 0.75241, 0.90518, 0.90518, 0.90518, 0.90518, 0.88401, 0.88401, 0.88401, 0.88401, 0.8785, 0.8785, 0.8801, 0.8801, 0.8801, 0.8801, 0.8801, 0.90747, 0.89049, 0.8785, 0.8785, 0.8785, 0.8785, 0.85162, 0.8785, 0.85162, 0.83908, 0.88762, 0.83908, 0.88762, 0.83908, 0.88762, 0.73293, 0.75241, 0.73293, 0.75241, 0.73293, 0.75241, 0.73293, 0.75241, 0.87289, 0.83016, 0.88506, 0.93125, 0.73133, 0.90518, 0.73133, 0.90518, 0.73133, 0.90518, 0.73133, 0.90518, 0.73133, 0.90518, 0.81921, 0.77618, 0.81921, 0.77618, 0.81921, 0.77618, 1, 1, 0.87356, 0.8785, 0.91075, 0.89608, 0.95958, 0.88401, 0.95958, 0.88401, 0.95958, 0.88401, 0.95958, 0.88401, 0.95958, 0.88401, 0.76229, 0.90167, 0.59526, 0.91916, 1, 1, 0.86304, 0.69225, 0.88401, 1, 1, 0.70424, 0.79468, 0.91926, 0.88175, 0.70823, 0.94903, 0.9121, 0.8785, 1, 1, 0.9121, 0.8785, 0.87802, 0.88656, 0.8785, 0.86943, 0.8801, 0.86943, 0.8801, 0.86943, 0.8801, 0.87402, 0.89291, 0.77958, 0.91343, 1, 1, 0.77958, 0.91343, 0.70864, 0.7173, 0.70864, 0.7173, 0.70864, 0.7173, 0.70864, 0.7173, 1, 1, 0.81055, 0.75841, 0.81055, 1.06452, 0.90399, 0.8785, 0.90399, 0.8785, 0.90399, 0.8785, 0.90399, 0.8785, 0.90399, 0.8785, 0.90399, 0.8785, 0.96017, 0.95794, 0.77892, 0.85162, 0.77892, 0.78257, 0.79492, 0.78257, 0.79492, 0.78257, 0.79492, 0.9297, 0.56892, 0.83908, 0.88762, 0.77539, 0.8715, 0.87508, 0.89049, 1, 1, 0.81055, 1.04106, 1.20528, 1.20528, 1, 1.15543, 0.70674, 0.98387, 0.94721, 1.33431, 1.45894, 0.95161, 1.06303, 0.83908, 0.80352, 0.57184, 0.6965, 0.56289, 0.82001, 0.56029, 0.81235, 1.02988, 0.83908, 0.7762, 0.68156, 0.80367, 0.73133, 0.78257, 0.87356, 0.86943, 0.95958, 0.75727, 0.89019, 1.04924, 0.9121, 0.7648, 0.86943, 0.87356, 0.79795, 0.78275, 0.81055, 0.77892, 0.9762, 0.82577, 0.99819, 0.84896, 0.95958, 0.77892, 0.96108, 1.01407, 0.89049, 1.02988, 0.94211, 0.96108, 0.8936, 0.84021, 0.87842, 0.96399, 0.79109, 0.89049, 1.00813, 1.02988, 0.86077, 0.87445, 0.92099, 0.84723, 0.86513, 0.8801, 0.75638, 0.85714, 0.78216, 0.79586, 0.87965, 0.94211, 0.97747, 0.78287, 0.97926, 0.84971, 1.02988, 0.94211, 0.8801, 0.94211, 0.84971, 0.73133, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0.90264, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0.90518, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0.90548, 1, 1, 1, 1, 1, 1, 0.96017, 0.95794, 0.96017, 0.95794, 0.96017, 0.95794, 0.77892, 0.85162, 1, 1, 0.89552, 0.90527, 1, 0.90363, 0.92794, 0.92794, 0.92794, 0.92794, 0.87012, 0.87012, 0.87012, 0.89552, 0.89552, 1.42259, 0.71143, 1.06152, 1, 1, 1.03372, 1.03372, 0.97171, 1.4956, 2.2807, 0.93835, 0.83406, 0.91133, 0.84107, 0.91133, 1, 1, 1, 0.72021, 1, 1.23108, 0.83489, 0.88525, 0.88525, 0.81499, 0.90527, 1.81055, 0.90527, 1.81055, 1.31006, 1.53711, 0.94434, 1.08696, 1, 0.95018, 0.77192, 0.85284, 0.90747, 1.17534, 0.69825, 0.9716, 1.37077, 0.90747, 0.90747, 0.85356, 0.90747, 0.90747, 1.44947, 0.85284, 0.8941, 0.8941, 0.70572, 0.8, 0.70572, 0.70572, 0.70572, 0.70572, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0.99862, 0.99862, 1, 1, 1, 1, 1, 1.08004, 0.91027, 1, 1, 1, 0.99862, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0.90727, 0.90727, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
 const CalibriBoldMetrics = {
@@ -31179,195 +31199,6 @@ function getXfaFontDict(name) {
   return dict;
 }
 
-;// ./src/core/ps_parser.js
-
-
-
-class PostScriptParser {
-  constructor(lexer) {
-    this.lexer = lexer;
-    this.operators = [];
-    this.token = null;
-    this.prev = null;
-  }
-  nextToken() {
-    this.prev = this.token;
-    this.token = this.lexer.getToken();
-  }
-  accept(type) {
-    if (this.token.type === type) {
-      this.nextToken();
-      return true;
-    }
-    return false;
-  }
-  expect(type) {
-    if (this.accept(type)) {
-      return true;
-    }
-    throw new FormatError(`Unexpected symbol: found ${this.token.type} expected ${type}.`);
-  }
-  parse() {
-    this.nextToken();
-    this.expect(PostScriptTokenTypes.LBRACE);
-    this.parseBlock();
-    this.expect(PostScriptTokenTypes.RBRACE);
-    return this.operators;
-  }
-  parseBlock() {
-    while (true) {
-      if (this.accept(PostScriptTokenTypes.NUMBER)) {
-        this.operators.push(this.prev.value);
-      } else if (this.accept(PostScriptTokenTypes.OPERATOR)) {
-        this.operators.push(this.prev.value);
-      } else if (this.accept(PostScriptTokenTypes.LBRACE)) {
-        this.parseCondition();
-      } else {
-        return;
-      }
-    }
-  }
-  parseCondition() {
-    const conditionLocation = this.operators.length;
-    this.operators.push(null, null);
-    this.parseBlock();
-    this.expect(PostScriptTokenTypes.RBRACE);
-    if (this.accept(PostScriptTokenTypes.IF)) {
-      this.operators[conditionLocation] = this.operators.length;
-      this.operators[conditionLocation + 1] = "jz";
-    } else if (this.accept(PostScriptTokenTypes.LBRACE)) {
-      const jumpLocation = this.operators.length;
-      this.operators.push(null, null);
-      const endOfTrue = this.operators.length;
-      this.parseBlock();
-      this.expect(PostScriptTokenTypes.RBRACE);
-      this.expect(PostScriptTokenTypes.IFELSE);
-      this.operators[jumpLocation] = this.operators.length;
-      this.operators[jumpLocation + 1] = "j";
-      this.operators[conditionLocation] = endOfTrue;
-      this.operators[conditionLocation + 1] = "jz";
-    } else {
-      throw new FormatError("PS Function: error parsing conditional.");
-    }
-  }
-}
-const PostScriptTokenTypes = {
-  LBRACE: 0,
-  RBRACE: 1,
-  NUMBER: 2,
-  OPERATOR: 3,
-  IF: 4,
-  IFELSE: 5
-};
-class PostScriptToken {
-  static get opCache() {
-    return shadow(this, "opCache", Object.create(null));
-  }
-  constructor(type, value) {
-    this.type = type;
-    this.value = value;
-  }
-  static getOperator(op) {
-    return PostScriptToken.opCache[op] ||= new PostScriptToken(PostScriptTokenTypes.OPERATOR, op);
-  }
-  static get LBRACE() {
-    return shadow(this, "LBRACE", new PostScriptToken(PostScriptTokenTypes.LBRACE, "{"));
-  }
-  static get RBRACE() {
-    return shadow(this, "RBRACE", new PostScriptToken(PostScriptTokenTypes.RBRACE, "}"));
-  }
-  static get IF() {
-    return shadow(this, "IF", new PostScriptToken(PostScriptTokenTypes.IF, "IF"));
-  }
-  static get IFELSE() {
-    return shadow(this, "IFELSE", new PostScriptToken(PostScriptTokenTypes.IFELSE, "IFELSE"));
-  }
-}
-class PostScriptLexer {
-  constructor(stream) {
-    this.stream = stream;
-    this.nextChar();
-    this.strBuf = [];
-  }
-  nextChar() {
-    return this.currentChar = this.stream.getByte();
-  }
-  getToken() {
-    let comment = false;
-    let ch = this.currentChar;
-    while (true) {
-      if (ch < 0) {
-        return EOF;
-      }
-      if (comment) {
-        if (ch === 0x0a || ch === 0x0d) {
-          comment = false;
-        }
-      } else if (ch === 0x25) {
-        comment = true;
-      } else if (!isWhiteSpace(ch)) {
-        break;
-      }
-      ch = this.nextChar();
-    }
-    switch (ch | 0) {
-      case 0x30:
-      case 0x31:
-      case 0x32:
-      case 0x33:
-      case 0x34:
-      case 0x35:
-      case 0x36:
-      case 0x37:
-      case 0x38:
-      case 0x39:
-      case 0x2b:
-      case 0x2d:
-      case 0x2e:
-        return new PostScriptToken(PostScriptTokenTypes.NUMBER, this.getNumber());
-      case 0x7b:
-        this.nextChar();
-        return PostScriptToken.LBRACE;
-      case 0x7d:
-        this.nextChar();
-        return PostScriptToken.RBRACE;
-    }
-    const strBuf = this.strBuf;
-    strBuf.length = 0;
-    strBuf[0] = String.fromCharCode(ch);
-    while ((ch = this.nextChar()) >= 0 && (ch >= 0x41 && ch <= 0x5a || ch >= 0x61 && ch <= 0x7a)) {
-      strBuf.push(String.fromCharCode(ch));
-    }
-    const str = strBuf.join("");
-    switch (str.toLowerCase()) {
-      case "if":
-        return PostScriptToken.IF;
-      case "ifelse":
-        return PostScriptToken.IFELSE;
-      default:
-        return PostScriptToken.getOperator(str);
-    }
-  }
-  getNumber() {
-    let ch = this.currentChar;
-    const strBuf = this.strBuf;
-    strBuf.length = 0;
-    strBuf[0] = String.fromCharCode(ch);
-    while ((ch = this.nextChar()) >= 0) {
-      if (ch >= 0x30 && ch <= 0x39 || ch === 0x2d || ch === 0x2e) {
-        strBuf.push(String.fromCharCode(ch));
-      } else {
-        break;
-      }
-    }
-    const value = parseFloat(strBuf.join(""));
-    if (isNaN(value)) {
-      throw new FormatError(`Invalid floating point number: ${value}`);
-    }
-    return value;
-  }
-}
-
 ;// ./src/core/postscript/lexer.js
 const TOKEN = {
   number: 0,
@@ -31442,8 +31273,8 @@ class lexer_Lexer {
         operatorSingletons[name] = token;
       }
     }
-    lexer_Lexer.#singletons = singletons;
-    lexer_Lexer.#operatorSingletons = operatorSingletons;
+    this.#singletons = singletons;
+    this.#operatorSingletons = operatorSingletons;
   }
   constructor(data) {
     if (!lexer_Lexer.#singletons) {
@@ -31856,10 +31687,10 @@ class PSStackToTree {
   static #idempotentUnary = null;
   static #negatedComparison = null;
   static #init() {
-    PSStackToTree.#binaryOps = new Set([TOKEN.add, TOKEN.sub, TOKEN.mul, TOKEN.div, TOKEN.idiv, TOKEN.mod, TOKEN.exp, TOKEN.atan, TOKEN.eq, TOKEN.ne, TOKEN.gt, TOKEN.ge, TOKEN.lt, TOKEN.le, TOKEN.and, TOKEN.or, TOKEN.xor, TOKEN.bitshift]);
-    PSStackToTree.#unaryOps = new Set([TOKEN.abs, TOKEN.neg, TOKEN.ceiling, TOKEN.floor, TOKEN.round, TOKEN.truncate, TOKEN.sqrt, TOKEN.sin, TOKEN.cos, TOKEN.ln, TOKEN.log, TOKEN.cvi, TOKEN.cvr, TOKEN.not]);
-    PSStackToTree.#idempotentUnary = new Set([TOKEN.abs, TOKEN.ceiling, TOKEN.cvi, TOKEN.cvr, TOKEN.floor, TOKEN.round, TOKEN.truncate]);
-    PSStackToTree.#negatedComparison = new Map([[TOKEN.eq, TOKEN.ne], [TOKEN.ne, TOKEN.eq], [TOKEN.lt, TOKEN.ge], [TOKEN.le, TOKEN.gt], [TOKEN.gt, TOKEN.le], [TOKEN.ge, TOKEN.lt]]);
+    this.#binaryOps = new Set([TOKEN.add, TOKEN.sub, TOKEN.mul, TOKEN.div, TOKEN.idiv, TOKEN.mod, TOKEN.exp, TOKEN.atan, TOKEN.eq, TOKEN.ne, TOKEN.gt, TOKEN.ge, TOKEN.lt, TOKEN.le, TOKEN.and, TOKEN.or, TOKEN.xor, TOKEN.bitshift]);
+    this.#unaryOps = new Set([TOKEN.abs, TOKEN.neg, TOKEN.ceiling, TOKEN.floor, TOKEN.round, TOKEN.truncate, TOKEN.sqrt, TOKEN.sin, TOKEN.cos, TOKEN.ln, TOKEN.log, TOKEN.cvi, TOKEN.cvr, TOKEN.not]);
+    this.#idempotentUnary = new Set([TOKEN.abs, TOKEN.ceiling, TOKEN.cvi, TOKEN.cvr, TOKEN.floor, TOKEN.round, TOKEN.truncate]);
+    this.#negatedComparison = new Map([[TOKEN.eq, TOKEN.ne], [TOKEN.ne, TOKEN.eq], [TOKEN.lt, TOKEN.ge], [TOKEN.le, TOKEN.gt], [TOKEN.gt, TOKEN.le], [TOKEN.ge, TOKEN.lt]]);
   }
   evaluate(program, numInputs) {
     if (!PSStackToTree.#binaryOps) {
@@ -32392,6 +32223,7 @@ class PSStackToTree {
 ;// ./src/core/postscript/js_evaluator.js
 
 
+
 const OP = {
   ARG: 0,
   CONST: 1,
@@ -32671,8 +32503,8 @@ class PsJsCompiler {
     let ip = 0,
       sp = 0;
     const n = ir.length;
-    const stack = PsJsCompiler.#stack;
-    const tmp = PsJsCompiler.#tmp;
+    const stack = this.#stack;
+    const tmp = this.#tmp;
     while (ip < n) {
       switch (ir[ip++] | 0) {
         case OP.ARG:
@@ -32686,7 +32518,7 @@ class PsJsCompiler {
             const slot = ir[ip++] | 0;
             const min = ir[ip++];
             const max = ir[ip++];
-            dest[destOffset + slot] = Math.max(Math.min(stack[--sp], max), min);
+            dest[destOffset + slot] = MathClamp(stack[--sp], min, max);
             break;
           }
         case OP.IF:
@@ -32880,17 +32712,289 @@ class PsJsCompiler {
     }
   }
 }
-function compilePostScriptToIR(source, domain, range) {
-  return new PsJsCompiler(domain, range).compile(parsePostScriptFunction(source));
-}
-function buildPostScriptJsFunction(source, domain, range) {
-  const ir = compilePostScriptToIR(source, domain, range);
-  if (!ir) {
-    return null;
+class PSStackBasedInterpreter {
+  static #stack = new Float64Array(100);
+  static #sp = 0;
+  static #push(v) {
+    if (this.#sp < this.#stack.length) {
+      this.#stack[this.#sp++] = v;
+    }
   }
-  return (src, srcOffset, dest, destOffset) => {
-    PsJsCompiler.execute(ir, src, srcOffset, dest, destOffset);
-  };
+  static #execOp(op) {
+    const stack = this.#stack;
+    switch (op) {
+      case TOKEN.true:
+        this.#push(1);
+        break;
+      case TOKEN.false:
+        this.#push(0);
+        break;
+      case TOKEN.abs:
+        stack[this.#sp - 1] = Math.abs(stack[this.#sp - 1]);
+        break;
+      case TOKEN.neg:
+        stack[this.#sp - 1] = -stack[this.#sp - 1];
+        break;
+      case TOKEN.ceiling:
+        stack[this.#sp - 1] = Math.ceil(stack[this.#sp - 1]);
+        break;
+      case TOKEN.floor:
+        stack[this.#sp - 1] = Math.floor(stack[this.#sp - 1]);
+        break;
+      case TOKEN.round:
+        stack[this.#sp - 1] = Math.floor(stack[this.#sp - 1] + 0.5);
+        break;
+      case TOKEN.truncate:
+        stack[this.#sp - 1] = Math.trunc(stack[this.#sp - 1]);
+        break;
+      case TOKEN.sqrt:
+        stack[this.#sp - 1] = Math.sqrt(stack[this.#sp - 1]);
+        break;
+      case TOKEN.sin:
+        stack[this.#sp - 1] = Math.sin(stack[this.#sp - 1] % 360 * _DEG_TO_RAD);
+        break;
+      case TOKEN.cos:
+        stack[this.#sp - 1] = Math.cos(stack[this.#sp - 1] % 360 * _DEG_TO_RAD);
+        break;
+      case TOKEN.ln:
+        stack[this.#sp - 1] = Math.log(stack[this.#sp - 1]);
+        break;
+      case TOKEN.log:
+        stack[this.#sp - 1] = Math.log10(stack[this.#sp - 1]);
+        break;
+      case TOKEN.cvi:
+        stack[this.#sp - 1] = Math.trunc(stack[this.#sp - 1]) | 0;
+        break;
+      case TOKEN.cvr:
+        break;
+      case TOKEN.not:
+        {
+          const v = stack[this.#sp - 1];
+          stack[this.#sp - 1] = v === 0 || v === 1 ? 1 - v : ~(v | 0);
+          break;
+        }
+      case TOKEN.add:
+        {
+          const b = stack[--this.#sp];
+          stack[this.#sp - 1] += b;
+          break;
+        }
+      case TOKEN.sub:
+        {
+          const b = stack[--this.#sp];
+          stack[this.#sp - 1] -= b;
+          break;
+        }
+      case TOKEN.mul:
+        {
+          const b = stack[--this.#sp];
+          stack[this.#sp - 1] *= b;
+          break;
+        }
+      case TOKEN.div:
+        {
+          const b = stack[--this.#sp];
+          stack[this.#sp - 1] = b !== 0 ? stack[this.#sp - 1] / b : 0;
+          break;
+        }
+      case TOKEN.idiv:
+        {
+          const b = stack[--this.#sp];
+          stack[this.#sp - 1] = b !== 0 ? Math.trunc(stack[this.#sp - 1] / b) : 0;
+          break;
+        }
+      case TOKEN.mod:
+        {
+          const b = stack[--this.#sp];
+          stack[this.#sp - 1] = b !== 0 ? stack[this.#sp - 1] % b : 0;
+          break;
+        }
+      case TOKEN.exp:
+        {
+          const b = stack[--this.#sp];
+          stack[this.#sp - 1] **= b;
+          break;
+        }
+      case TOKEN.atan:
+        {
+          const dx = stack[--this.#sp];
+          const deg = Math.atan2(stack[this.#sp - 1], dx) * _RAD_TO_DEG;
+          stack[this.#sp - 1] = deg < 0 ? deg + 360 : deg;
+          break;
+        }
+      case TOKEN.eq:
+        {
+          const b = stack[--this.#sp];
+          stack[this.#sp - 1] = stack[this.#sp - 1] === b ? 1 : 0;
+          break;
+        }
+      case TOKEN.ne:
+        {
+          const b = stack[--this.#sp];
+          stack[this.#sp - 1] = stack[this.#sp - 1] !== b ? 1 : 0;
+          break;
+        }
+      case TOKEN.gt:
+        {
+          const b = stack[--this.#sp];
+          stack[this.#sp - 1] = stack[this.#sp - 1] > b ? 1 : 0;
+          break;
+        }
+      case TOKEN.ge:
+        {
+          const b = stack[--this.#sp];
+          stack[this.#sp - 1] = stack[this.#sp - 1] >= b ? 1 : 0;
+          break;
+        }
+      case TOKEN.lt:
+        {
+          const b = stack[--this.#sp];
+          stack[this.#sp - 1] = stack[this.#sp - 1] < b ? 1 : 0;
+          break;
+        }
+      case TOKEN.le:
+        {
+          const b = stack[--this.#sp];
+          stack[this.#sp - 1] = stack[this.#sp - 1] <= b ? 1 : 0;
+          break;
+        }
+      case TOKEN.and:
+        {
+          const b = stack[--this.#sp] | 0;
+          stack[this.#sp - 1] = (stack[this.#sp - 1] | 0) & b;
+          break;
+        }
+      case TOKEN.or:
+        {
+          const b = stack[--this.#sp] | 0;
+          stack[this.#sp - 1] = stack[this.#sp - 1] | 0 | b;
+          break;
+        }
+      case TOKEN.xor:
+        {
+          const b = stack[--this.#sp] | 0;
+          stack[this.#sp - 1] = (stack[this.#sp - 1] | 0) ^ b;
+          break;
+        }
+      case TOKEN.bitshift:
+        {
+          const amt = stack[--this.#sp] | 0;
+          const v = stack[this.#sp - 1] | 0;
+          stack[this.#sp - 1] = amt > 0 ? v << amt : v >> -amt;
+          break;
+        }
+      case TOKEN.min:
+        {
+          const b = stack[--this.#sp];
+          stack[this.#sp - 1] = Math.min(stack[this.#sp - 1], b);
+          break;
+        }
+      case TOKEN.max:
+        {
+          const b = stack[--this.#sp];
+          stack[this.#sp - 1] = Math.max(stack[this.#sp - 1], b);
+          break;
+        }
+      case TOKEN.dup:
+        this.#push(stack[this.#sp - 1]);
+        break;
+      case TOKEN.exch:
+        {
+          const a = stack[--this.#sp];
+          const b = stack[--this.#sp];
+          this.#push(a);
+          this.#push(b);
+          break;
+        }
+      case TOKEN.pop:
+        this.#sp--;
+        break;
+      case TOKEN.copy:
+        {
+          const n = Math.trunc(stack[--this.#sp]);
+          const base = this.#sp - n;
+          for (let k = 0; k < n; k++) {
+            this.#push(stack[base + k]);
+          }
+          break;
+        }
+      case TOKEN.index:
+        {
+          const i = Math.trunc(stack[--this.#sp]);
+          this.#push(stack[this.#sp - 1 - i]);
+          break;
+        }
+      case TOKEN.roll:
+        {
+          const j = Math.trunc(stack[--this.#sp]);
+          const n = Math.trunc(stack[--this.#sp]);
+          if (n > 1 && j !== 0) {
+            const mod = (j % n + n) % n;
+            if (mod !== 0) {
+              const base = this.#sp - n;
+              const sub = stack.slice(base, this.#sp);
+              for (let k = 0; k < n; k++) {
+                stack[base + k] = sub[(k - mod + n) % n];
+              }
+            }
+          }
+          break;
+        }
+    }
+  }
+  static #execBlock(instructions) {
+    for (const instr of instructions) {
+      switch (instr.type) {
+        case PS_NODE.number:
+          this.#push(instr.value);
+          break;
+        case PS_NODE.operator:
+          this.#execOp(instr.op);
+          break;
+        case PS_NODE.if:
+          if (this.#stack[--this.#sp] !== 0) {
+            this.#execBlock(instr.then.instructions);
+          }
+          break;
+        case PS_NODE.ifelse:
+          if (this.#stack[--this.#sp] !== 0) {
+            this.#execBlock(instr.then.instructions);
+          } else {
+            this.#execBlock(instr.otherwise.instructions);
+          }
+          break;
+      }
+    }
+  }
+  static build(program, domain, range) {
+    const nIn = domain.length >> 1;
+    const nOut = range.length >> 1;
+    const {
+      instructions
+    } = program.body;
+    return (src, srcOffset, dest, destOffset) => {
+      this.#sp = 0;
+      for (let i = 0; i < nIn; i++) {
+        this.#push(src[srcOffset + i]);
+      }
+      this.#execBlock(instructions);
+      const base = this.#sp - nOut;
+      for (let i = 0; i < nOut; i++) {
+        const v = base + i >= 0 ? this.#stack[base + i] : 0;
+        dest[destOffset + i] = MathClamp(range[i * 2 + 1], range[i * 2], v);
+      }
+    };
+  }
+}
+function buildPostScriptJsFunction(source, domain, range, forceInterpreter = false) {
+  const program = parsePostScriptFunction(source);
+  const ir = !forceInterpreter && new PsJsCompiler(domain, range).compile(program);
+  if (ir) {
+    return (src, srcOffset, dest, destOffset) => {
+      PsJsCompiler.execute(ir, src, srcOffset, dest, destOffset);
+    };
+  }
+  return PSStackBasedInterpreter.build(program, domain, range);
 }
 
 ;// ./src/core/postscript/wasm_compiler.js
@@ -32998,23 +33102,23 @@ class PsWasmCompiler {
   static #f64View = null;
   static #f64Arr = null;
   static #init() {
-    PsWasmCompiler.#comparisonToOp = new Map([[TOKEN.eq, wasm_compiler_OP.f64_eq], [TOKEN.ne, wasm_compiler_OP.f64_ne], [TOKEN.lt, wasm_compiler_OP.f64_lt], [TOKEN.le, wasm_compiler_OP.f64_le], [TOKEN.gt, wasm_compiler_OP.f64_gt], [TOKEN.ge, wasm_compiler_OP.f64_ge]]);
-    PsWasmCompiler.#importIdx = Object.create(null);
+    this.#comparisonToOp = new Map([[TOKEN.eq, wasm_compiler_OP.f64_eq], [TOKEN.ne, wasm_compiler_OP.f64_ne], [TOKEN.lt, wasm_compiler_OP.f64_lt], [TOKEN.le, wasm_compiler_OP.f64_le], [TOKEN.gt, wasm_compiler_OP.f64_gt], [TOKEN.ge, wasm_compiler_OP.f64_ge]]);
+    this.#importIdx = Object.create(null);
     for (let i = 0; i < MATH_IMPORTS.length; i++) {
-      PsWasmCompiler.#importIdx[MATH_IMPORTS[i][0]] = i;
+      this.#importIdx[MATH_IMPORTS[i][0]] = i;
     }
-    PsWasmCompiler.#degToRad = Math.PI / 180;
-    PsWasmCompiler.#radToDeg = 180 / Math.PI;
-    PsWasmCompiler.#importTypeEntries = MATH_IMPORTS.map(([,,, params, results]) => [FUNC_TYPE, ...vec(params), ...vec(results)]);
-    PsWasmCompiler.#importSection = new Uint8Array(section(SECTION.import, vec(MATH_IMPORTS.map(([, mod, field], i) => [...encodeASCIIString(mod), ...encodeASCIIString(field), EXTERN_FUNC, ...unsignedLEB128(i + 1)]))));
-    PsWasmCompiler.#functionSection = new Uint8Array(section(SECTION.function, vec([[0]])));
-    PsWasmCompiler.#memorySection = new Uint8Array(section(SECTION.memory, vec([[0x00, 0x01]])));
-    PsWasmCompiler.#exportSection = new Uint8Array(section(SECTION.export, vec([[...encodeASCIIString("fn"), EXTERN_FUNC, ...unsignedLEB128(MATH_IMPORTS.length)], [...encodeASCIIString("mem"), EXTERN_MEM, 0x00]])));
-    PsWasmCompiler.#wasmMagicVersion = new Uint8Array([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]);
+    this.#degToRad = Math.PI / 180;
+    this.#radToDeg = 180 / Math.PI;
+    this.#importTypeEntries = MATH_IMPORTS.map(([,,, params, results]) => [FUNC_TYPE, ...vec(params), ...vec(results)]);
+    this.#importSection = new Uint8Array(section(SECTION.import, vec(MATH_IMPORTS.map(([, mod, field], i) => [...encodeASCIIString(mod), ...encodeASCIIString(field), EXTERN_FUNC, ...unsignedLEB128(i + 1)]))));
+    this.#functionSection = new Uint8Array(section(SECTION.function, vec([[0]])));
+    this.#memorySection = new Uint8Array(section(SECTION.memory, vec([[0x00, 0x01]])));
+    this.#exportSection = new Uint8Array(section(SECTION.export, vec([[...encodeASCIIString("fn"), EXTERN_FUNC, ...unsignedLEB128(MATH_IMPORTS.length)], [...encodeASCIIString("mem"), EXTERN_MEM, 0x00]])));
+    this.#wasmMagicVersion = new Uint8Array([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]);
     const f64Buf = new ArrayBuffer(8);
-    PsWasmCompiler.#f64View = new DataView(f64Buf);
-    PsWasmCompiler.#f64Arr = new Uint8Array(f64Buf);
-    PsWasmCompiler.#initialized = true;
+    this.#f64View = new DataView(f64Buf);
+    this.#f64Arr = new Uint8Array(f64Buf);
+    this.#initialized = true;
   }
   constructor(domain, range) {
     if (!PsWasmCompiler.#initialized) {
@@ -33928,19 +34032,23 @@ class GlobalImageCache {
 
 
 
+const FunctionType = {
+  SAMPLED: 0,
+  EXPONENTIAL_INTERPOLATION: 2,
+  STITCHING: 3,
+  POSTSCRIPT_CALCULATOR: 4
+};
 class PDFFunctionFactory {
   static #useWasm = true;
   static setOptions({
     useWasm
   }) {
-    PDFFunctionFactory.#useWasm = useWasm;
+    this.#useWasm = useWasm;
   }
   constructor({
-    xref,
-    isEvalSupported = true
+    xref
   }) {
     this.xref = xref;
-    this.isEvalSupported = isEvalSupported !== false;
   }
   get useWasm() {
     return PDFFunctionFactory.#useWasm;
@@ -34015,18 +34123,16 @@ class PDFFunction {
     const dict = fn.dict || fn;
     const typeNum = dict.get("FunctionType");
     switch (typeNum) {
-      case 0:
+      case FunctionType.SAMPLED:
         return this.constructSampled(factory, fn, dict);
-      case 1:
-        break;
-      case 2:
+      case FunctionType.EXPONENTIAL_INTERPOLATION:
         return this.constructInterpolated(factory, dict);
-      case 3:
+      case FunctionType.STITCHING:
         return this.constructStiched(factory, dict);
-      case 4:
+      case FunctionType.POSTSCRIPT_CALCULATOR:
         return this.constructPostScript(factory, fn, dict);
     }
-    throw new FormatError("Unknown type of function");
+    throw new FormatError(`Unknown function type: ${typeNum}`);
   }
   static parseArray(factory, fnObj) {
     const {
@@ -34043,27 +34149,16 @@ class PDFFunction {
     };
   }
   static constructSampled(factory, fn, dict) {
-    function toMultiArray(arr) {
-      const inputLength = arr.length;
-      const out = [];
-      let index = 0;
-      for (let i = 0; i < inputLength; i += 2) {
-        out[index++] = [arr[i], arr[i + 1]];
-      }
-      return out;
-    }
     function interpolate(x, xmin, xmax, ymin, ymax) {
       return ymin + (x - xmin) * ((ymax - ymin) / (xmax - xmin));
     }
-    let domain = toNumberArray(dict.getArray("Domain"));
-    let range = toNumberArray(dict.getArray("Range"));
+    const domain = toNumberArray(dict.getArray("Domain"));
+    const range = toNumberArray(dict.getArray("Range"));
     if (!domain || !range) {
       throw new FormatError("No domain or range");
     }
     const inputSize = domain.length / 2;
     const outputSize = range.length / 2;
-    domain = toMultiArray(domain);
-    range = toMultiArray(range);
     const size = toNumberArray(dict.getArray("Size"));
     const bps = dict.get("BitsPerSample");
     const order = dict.get("Order") || 1;
@@ -34074,13 +34169,10 @@ class PDFFunction {
     if (!encode) {
       encode = [];
       for (let i = 0; i < inputSize; ++i) {
-        encode.push([0, size[i] - 1]);
+        encode.push(0, size[i] - 1);
       }
-    } else {
-      encode = toMultiArray(encode);
     }
-    let decode = toNumberArray(dict.getArray("Decode"));
-    decode = !decode ? range : toMultiArray(decode);
+    const decode = toNumberArray(dict.getArray("Decode")) || range;
     const samples = this.getSampleArray(size, outputSize, bps, fn);
     return function constructSampledFn(src, srcOffset, dest, destOffset) {
       const cubeVertices = 1 << inputSize;
@@ -34090,10 +34182,10 @@ class PDFFunction {
       let k = outputSize,
         pos = 1;
       for (i = 0; i < inputSize; ++i) {
-        const domain_2i = domain[i][0];
-        const domain_2i_1 = domain[i][1];
+        const domain_2i = domain[2 * i];
+        const domain_2i_1 = domain[2 * i + 1];
         const xi = MathClamp(src[srcOffset + i], domain_2i, domain_2i_1);
-        let e = interpolate(xi, domain_2i, domain_2i_1, encode[i][0], encode[i][1]);
+        let e = interpolate(xi, domain_2i, domain_2i_1, encode[2 * i], encode[2 * i + 1]);
         const size_i = size[i];
         e = MathClamp(e, 0, size_i - 1);
         const e0 = e < size_i - 1 ? Math.floor(e) : e - 1;
@@ -34118,8 +34210,8 @@ class PDFFunction {
         for (i = 0; i < cubeVertices; i++) {
           rj += samples[cubeVertex[i] + j] * cubeN[i];
         }
-        rj = interpolate(rj, 0, 1, decode[j][0], decode[j][1]);
-        dest[destOffset + j] = MathClamp(rj, range[j][0], range[j][1]);
+        rj = interpolate(rj, 0, 1, decode[2 * j], decode[2 * j + 1]);
+        dest[destOffset + j] = MathClamp(rj, range[2 * j], range[2 * j + 1]);
       }
     };
   }
@@ -34184,64 +34276,17 @@ class PDFFunction {
     if (!range) {
       throw new FormatError("No range.");
     }
+    const psCode = fn.getString();
     try {
       if (factory.useWasm) {
-        const wasmFn = buildPostScriptWasmFunction(fn.getString(), domain, range);
+        const wasmFn = buildPostScriptWasmFunction(psCode, domain, range);
         if (wasmFn) {
           return wasmFn;
         }
-      } else {
-        const jsFn = buildPostScriptJsFunction(fn.getString(), domain, range);
-        if (jsFn) {
-          return jsFn;
-        }
       }
     } catch {}
-    warn("Unable to compile PS function, using interpreter");
-    fn.reset();
-    const lexer = new PostScriptLexer(fn);
-    const parser = new PostScriptParser(lexer);
-    const code = parser.parse();
-    if (factory.isEvalSupported && FeatureTest.isEvalSupported) {
-      const compiled = new PostScriptCompiler().compile(code, domain, range);
-      if (compiled) {
-        return new Function("src", "srcOffset", "dest", "destOffset", compiled);
-      }
-    }
-    info("Unable to compile PS function");
-    const numOutputs = range.length >> 1;
-    const numInputs = domain.length >> 1;
-    const evaluator = new PostScriptEvaluator(code);
-    const cache = Object.create(null);
-    const MAX_CACHE_SIZE = 2048 * 4;
-    let cache_available = MAX_CACHE_SIZE;
-    const tmpBuf = new Float32Array(numInputs);
-    return function constructPostScriptFn(src, srcOffset, dest, destOffset) {
-      let i, value;
-      let key = "";
-      const input = tmpBuf;
-      for (i = 0; i < numInputs; i++) {
-        value = src[srcOffset + i];
-        input[i] = value;
-        key += value + "_";
-      }
-      const cachedValue = cache[key];
-      if (cachedValue !== undefined) {
-        dest.set(cachedValue, destOffset);
-        return;
-      }
-      const output = new Float32Array(numOutputs);
-      const stack = evaluator.execute(input);
-      const stackIndex = stack.length - numOutputs;
-      for (i = 0; i < numOutputs; i++) {
-        output[i] = MathClamp(stack[stackIndex + i], range[i * 2], range[i * 2 + 1]);
-      }
-      if (cache_available > 0) {
-        cache_available--;
-        cache[key] = output;
-      }
-      dest.set(output, destOffset);
-    };
+    warn("Failed to compile PostScript function to wasm, falling back to JS");
+    return buildPostScriptJsFunction(psCode, domain, range);
   }
 }
 function isPDFFunction(v) {
@@ -34254,611 +34299,6 @@ function isPDFFunction(v) {
     return false;
   }
   return fnDict.has("FunctionType");
-}
-class PostScriptStack {
-  static MAX_STACK_SIZE = 100;
-  constructor(initialStack) {
-    this.stack = initialStack ? Array.from(initialStack) : [];
-  }
-  push(value) {
-    if (this.stack.length >= PostScriptStack.MAX_STACK_SIZE) {
-      throw new Error("PostScript function stack overflow.");
-    }
-    this.stack.push(value);
-  }
-  pop() {
-    if (this.stack.length <= 0) {
-      throw new Error("PostScript function stack underflow.");
-    }
-    return this.stack.pop();
-  }
-  copy(n) {
-    if (this.stack.length + n >= PostScriptStack.MAX_STACK_SIZE) {
-      throw new Error("PostScript function stack overflow.");
-    }
-    const stack = this.stack;
-    for (let i = stack.length - n, j = n - 1; j >= 0; j--, i++) {
-      stack.push(stack[i]);
-    }
-  }
-  index(n) {
-    this.push(this.stack[this.stack.length - n - 1]);
-  }
-  roll(n, p) {
-    const stack = this.stack;
-    const l = stack.length - n;
-    const r = stack.length - 1;
-    const c = l + (p - Math.floor(p / n) * n);
-    for (let i = l, j = r; i < j; i++, j--) {
-      const t = stack[i];
-      stack[i] = stack[j];
-      stack[j] = t;
-    }
-    for (let i = l, j = c - 1; i < j; i++, j--) {
-      const t = stack[i];
-      stack[i] = stack[j];
-      stack[j] = t;
-    }
-    for (let i = c, j = r; i < j; i++, j--) {
-      const t = stack[i];
-      stack[i] = stack[j];
-      stack[j] = t;
-    }
-  }
-}
-class PostScriptEvaluator {
-  constructor(operators) {
-    this.operators = operators;
-  }
-  execute(initialStack) {
-    const stack = new PostScriptStack(initialStack);
-    let counter = 0;
-    const operators = this.operators;
-    const length = operators.length;
-    let operator, a, b;
-    while (counter < length) {
-      operator = operators[counter++];
-      if (typeof operator === "number") {
-        stack.push(operator);
-        continue;
-      }
-      switch (operator) {
-        case "jz":
-          b = stack.pop();
-          a = stack.pop();
-          if (!a) {
-            counter = b;
-          }
-          break;
-        case "j":
-          a = stack.pop();
-          counter = a;
-          break;
-        case "abs":
-          a = stack.pop();
-          stack.push(Math.abs(a));
-          break;
-        case "add":
-          b = stack.pop();
-          a = stack.pop();
-          stack.push(a + b);
-          break;
-        case "and":
-          b = stack.pop();
-          a = stack.pop();
-          if (typeof a === "boolean" && typeof b === "boolean") {
-            stack.push(a && b);
-          } else {
-            stack.push(a & b);
-          }
-          break;
-        case "atan":
-          b = stack.pop();
-          a = stack.pop();
-          a = Math.atan2(a, b) / Math.PI * 180;
-          if (a < 0) {
-            a += 360;
-          }
-          stack.push(a);
-          break;
-        case "bitshift":
-          b = stack.pop();
-          a = stack.pop();
-          if (a > 0) {
-            stack.push(a << b);
-          } else {
-            stack.push(a >> b);
-          }
-          break;
-        case "ceiling":
-          a = stack.pop();
-          stack.push(Math.ceil(a));
-          break;
-        case "copy":
-          a = stack.pop();
-          stack.copy(a);
-          break;
-        case "cos":
-          a = stack.pop();
-          stack.push(Math.cos(a % 360 / 180 * Math.PI));
-          break;
-        case "cvi":
-          a = stack.pop() | 0;
-          stack.push(a);
-          break;
-        case "cvr":
-          break;
-        case "div":
-          b = stack.pop();
-          a = stack.pop();
-          stack.push(a / b);
-          break;
-        case "dup":
-          stack.copy(1);
-          break;
-        case "eq":
-          b = stack.pop();
-          a = stack.pop();
-          stack.push(a === b);
-          break;
-        case "exch":
-          stack.roll(2, 1);
-          break;
-        case "exp":
-          b = stack.pop();
-          a = stack.pop();
-          stack.push(a ** b);
-          break;
-        case "false":
-          stack.push(false);
-          break;
-        case "floor":
-          a = stack.pop();
-          stack.push(Math.floor(a));
-          break;
-        case "ge":
-          b = stack.pop();
-          a = stack.pop();
-          stack.push(a >= b);
-          break;
-        case "gt":
-          b = stack.pop();
-          a = stack.pop();
-          stack.push(a > b);
-          break;
-        case "idiv":
-          b = stack.pop();
-          a = stack.pop();
-          stack.push(a / b | 0);
-          break;
-        case "index":
-          a = stack.pop();
-          stack.index(a);
-          break;
-        case "le":
-          b = stack.pop();
-          a = stack.pop();
-          stack.push(a <= b);
-          break;
-        case "ln":
-          a = stack.pop();
-          stack.push(Math.log(a));
-          break;
-        case "log":
-          a = stack.pop();
-          stack.push(Math.log10(a));
-          break;
-        case "lt":
-          b = stack.pop();
-          a = stack.pop();
-          stack.push(a < b);
-          break;
-        case "mod":
-          b = stack.pop();
-          a = stack.pop();
-          stack.push(a % b);
-          break;
-        case "mul":
-          b = stack.pop();
-          a = stack.pop();
-          stack.push(a * b);
-          break;
-        case "ne":
-          b = stack.pop();
-          a = stack.pop();
-          stack.push(a !== b);
-          break;
-        case "neg":
-          a = stack.pop();
-          stack.push(-a);
-          break;
-        case "not":
-          a = stack.pop();
-          if (typeof a === "boolean") {
-            stack.push(!a);
-          } else {
-            stack.push(~a);
-          }
-          break;
-        case "or":
-          b = stack.pop();
-          a = stack.pop();
-          if (typeof a === "boolean" && typeof b === "boolean") {
-            stack.push(a || b);
-          } else {
-            stack.push(a | b);
-          }
-          break;
-        case "pop":
-          stack.pop();
-          break;
-        case "roll":
-          b = stack.pop();
-          a = stack.pop();
-          stack.roll(a, b);
-          break;
-        case "round":
-          a = stack.pop();
-          stack.push(Math.round(a));
-          break;
-        case "sin":
-          a = stack.pop();
-          stack.push(Math.sin(a % 360 / 180 * Math.PI));
-          break;
-        case "sqrt":
-          a = stack.pop();
-          stack.push(Math.sqrt(a));
-          break;
-        case "sub":
-          b = stack.pop();
-          a = stack.pop();
-          stack.push(a - b);
-          break;
-        case "true":
-          stack.push(true);
-          break;
-        case "truncate":
-          a = stack.pop();
-          a = a < 0 ? Math.ceil(a) : Math.floor(a);
-          stack.push(a);
-          break;
-        case "xor":
-          b = stack.pop();
-          a = stack.pop();
-          if (typeof a === "boolean" && typeof b === "boolean") {
-            stack.push(a !== b);
-          } else {
-            stack.push(a ^ b);
-          }
-          break;
-        default:
-          throw new FormatError(`Unknown operator ${operator}`);
-      }
-    }
-    return stack.stack;
-  }
-}
-class AstNode {
-  constructor(type) {
-    this.type = type;
-  }
-  visit(visitor) {
-    unreachable("abstract method");
-  }
-}
-class AstArgument extends AstNode {
-  constructor(index, min, max) {
-    super("args");
-    this.index = index;
-    this.min = min;
-    this.max = max;
-  }
-  visit(visitor) {
-    visitor.visitArgument(this);
-  }
-}
-class AstLiteral extends AstNode {
-  constructor(number) {
-    super("literal");
-    this.number = number;
-    this.min = number;
-    this.max = number;
-  }
-  visit(visitor) {
-    visitor.visitLiteral(this);
-  }
-}
-class AstBinaryOperation extends AstNode {
-  constructor(op, arg1, arg2, min, max) {
-    super("binary");
-    this.op = op;
-    this.arg1 = arg1;
-    this.arg2 = arg2;
-    this.min = min;
-    this.max = max;
-  }
-  visit(visitor) {
-    visitor.visitBinaryOperation(this);
-  }
-}
-class AstMin extends AstNode {
-  constructor(arg, max) {
-    super("max");
-    this.arg = arg;
-    this.min = arg.min;
-    this.max = max;
-  }
-  visit(visitor) {
-    visitor.visitMin(this);
-  }
-}
-class AstVariable extends AstNode {
-  constructor(index, min, max) {
-    super("var");
-    this.index = index;
-    this.min = min;
-    this.max = max;
-  }
-  visit(visitor) {
-    visitor.visitVariable(this);
-  }
-}
-class AstVariableDefinition extends AstNode {
-  constructor(variable, arg) {
-    super("definition");
-    this.variable = variable;
-    this.arg = arg;
-  }
-  visit(visitor) {
-    visitor.visitVariableDefinition(this);
-  }
-}
-class ExpressionBuilderVisitor {
-  parts = [];
-  visitArgument(arg) {
-    this.parts.push("Math.max(", arg.min, ", Math.min(", arg.max, ", src[srcOffset + ", arg.index, "]))");
-  }
-  visitVariable(variable) {
-    this.parts.push("v", variable.index);
-  }
-  visitLiteral(literal) {
-    this.parts.push(literal.number);
-  }
-  visitBinaryOperation(operation) {
-    this.parts.push("(");
-    operation.arg1.visit(this);
-    this.parts.push(" ", operation.op, " ");
-    operation.arg2.visit(this);
-    this.parts.push(")");
-  }
-  visitVariableDefinition(definition) {
-    this.parts.push("var ");
-    definition.variable.visit(this);
-    this.parts.push(" = ");
-    definition.arg.visit(this);
-    this.parts.push(";");
-  }
-  visitMin(max) {
-    this.parts.push("Math.min(");
-    max.arg.visit(this);
-    this.parts.push(", ", max.max, ")");
-  }
-  toString() {
-    return this.parts.join("");
-  }
-}
-function buildAddOperation(num1, num2) {
-  if (num2.type === "literal" && num2.number === 0) {
-    return num1;
-  }
-  if (num1.type === "literal" && num1.number === 0) {
-    return num2;
-  }
-  if (num2.type === "literal" && num1.type === "literal") {
-    return new AstLiteral(num1.number + num2.number);
-  }
-  return new AstBinaryOperation("+", num1, num2, num1.min + num2.min, num1.max + num2.max);
-}
-function buildMulOperation(num1, num2) {
-  if (num2.type === "literal") {
-    if (num2.number === 0) {
-      return new AstLiteral(0);
-    } else if (num2.number === 1) {
-      return num1;
-    } else if (num1.type === "literal") {
-      return new AstLiteral(num1.number * num2.number);
-    }
-  }
-  if (num1.type === "literal") {
-    if (num1.number === 0) {
-      return new AstLiteral(0);
-    } else if (num1.number === 1) {
-      return num2;
-    }
-  }
-  const min = Math.min(num1.min * num2.min, num1.min * num2.max, num1.max * num2.min, num1.max * num2.max);
-  const max = Math.max(num1.min * num2.min, num1.min * num2.max, num1.max * num2.min, num1.max * num2.max);
-  return new AstBinaryOperation("*", num1, num2, min, max);
-}
-function buildSubOperation(num1, num2) {
-  if (num2.type === "literal") {
-    if (num2.number === 0) {
-      return num1;
-    } else if (num1.type === "literal") {
-      return new AstLiteral(num1.number - num2.number);
-    }
-  }
-  if (num2.type === "binary" && num2.op === "-" && num1.type === "literal" && num1.number === 1 && num2.arg1.type === "literal" && num2.arg1.number === 1) {
-    return num2.arg2;
-  }
-  return new AstBinaryOperation("-", num1, num2, num1.min - num2.max, num1.max - num2.min);
-}
-function buildMinOperation(num1, max) {
-  if (num1.min >= max) {
-    return new AstLiteral(max);
-  } else if (num1.max <= max) {
-    return num1;
-  }
-  return new AstMin(num1, max);
-}
-class PostScriptCompiler {
-  compile(code, domain, range) {
-    const stack = [];
-    const instructions = [];
-    const inputSize = domain.length >> 1,
-      outputSize = range.length >> 1;
-    let lastRegister = 0;
-    let n, j;
-    let num1, num2, ast1, ast2, tmpVar, item;
-    for (let i = 0; i < inputSize; i++) {
-      stack.push(new AstArgument(i, domain[i * 2], domain[i * 2 + 1]));
-    }
-    for (let i = 0, ii = code.length; i < ii; i++) {
-      item = code[i];
-      if (typeof item === "number") {
-        stack.push(new AstLiteral(item));
-        continue;
-      }
-      switch (item) {
-        case "add":
-          if (stack.length < 2) {
-            return null;
-          }
-          num2 = stack.pop();
-          num1 = stack.pop();
-          stack.push(buildAddOperation(num1, num2));
-          break;
-        case "cvr":
-          if (stack.length < 1) {
-            return null;
-          }
-          break;
-        case "mul":
-          if (stack.length < 2) {
-            return null;
-          }
-          num2 = stack.pop();
-          num1 = stack.pop();
-          stack.push(buildMulOperation(num1, num2));
-          break;
-        case "sub":
-          if (stack.length < 2) {
-            return null;
-          }
-          num2 = stack.pop();
-          num1 = stack.pop();
-          stack.push(buildSubOperation(num1, num2));
-          break;
-        case "exch":
-          if (stack.length < 2) {
-            return null;
-          }
-          ast1 = stack.pop();
-          ast2 = stack.pop();
-          stack.push(ast1, ast2);
-          break;
-        case "pop":
-          if (stack.length < 1) {
-            return null;
-          }
-          stack.pop();
-          break;
-        case "index":
-          if (stack.length < 1) {
-            return null;
-          }
-          num1 = stack.pop();
-          if (num1.type !== "literal") {
-            return null;
-          }
-          n = num1.number;
-          if (n < 0 || !Number.isInteger(n) || stack.length < n) {
-            return null;
-          }
-          ast1 = stack[stack.length - n - 1];
-          if (ast1.type === "literal" || ast1.type === "var") {
-            stack.push(ast1);
-            break;
-          }
-          tmpVar = new AstVariable(lastRegister++, ast1.min, ast1.max);
-          stack[stack.length - n - 1] = tmpVar;
-          stack.push(tmpVar);
-          instructions.push(new AstVariableDefinition(tmpVar, ast1));
-          break;
-        case "dup":
-          if (stack.length < 1) {
-            return null;
-          }
-          if (typeof code[i + 1] === "number" && code[i + 2] === "gt" && code[i + 3] === i + 7 && code[i + 4] === "jz" && code[i + 5] === "pop" && code[i + 6] === code[i + 1]) {
-            num1 = stack.pop();
-            stack.push(buildMinOperation(num1, code[i + 1]));
-            i += 6;
-            break;
-          }
-          ast1 = stack.at(-1);
-          if (ast1.type === "literal" || ast1.type === "var") {
-            stack.push(ast1);
-            break;
-          }
-          tmpVar = new AstVariable(lastRegister++, ast1.min, ast1.max);
-          stack[stack.length - 1] = tmpVar;
-          stack.push(tmpVar);
-          instructions.push(new AstVariableDefinition(tmpVar, ast1));
-          break;
-        case "roll":
-          if (stack.length < 2) {
-            return null;
-          }
-          num2 = stack.pop();
-          num1 = stack.pop();
-          if (num2.type !== "literal" || num1.type !== "literal") {
-            return null;
-          }
-          j = num2.number;
-          n = num1.number;
-          if (n <= 0 || !Number.isInteger(n) || !Number.isInteger(j) || stack.length < n) {
-            return null;
-          }
-          j = (j % n + n) % n;
-          if (j === 0) {
-            break;
-          }
-          stack.push(...stack.splice(stack.length - n, n - j));
-          break;
-        default:
-          return null;
-      }
-    }
-    if (stack.length !== outputSize) {
-      return null;
-    }
-    const result = [];
-    for (const instruction of instructions) {
-      const statementBuilder = new ExpressionBuilderVisitor();
-      instruction.visit(statementBuilder);
-      result.push(statementBuilder.toString());
-    }
-    for (let i = 0, ii = stack.length; i < ii; i++) {
-      const expr = stack[i],
-        statementBuilder = new ExpressionBuilderVisitor();
-      expr.visit(statementBuilder);
-      const min = range[i * 2],
-        max = range[i * 2 + 1];
-      const out = [statementBuilder.toString()];
-      if (min > expr.min) {
-        out.unshift("Math.max(", min, ", ");
-        out.push(")");
-      }
-      if (max < expr.max) {
-        out.unshift("Math.min(", max, ", ");
-        out.push(")");
-      }
-      out.unshift("dest[destOffset + ", i, "] = ");
-      out.push(";");
-      result.push(out.join(""));
-    }
-    return result.join("\n");
-  }
 }
 
 ;// ./src/core/bidi.js
@@ -35487,6 +34927,7 @@ class MurmurHash3_64 {
 }
 
 ;// ./src/core/image.js
+
 
 
 
@@ -36350,7 +35791,6 @@ const DefaultPartialEvaluatorOptions = Object.freeze({
   maxImageSize: -1,
   disableFontFace: false,
   ignoreErrors: false,
-  isEvalSupported: true,
   isOffscreenCanvasSupported: false,
   isImageDecoderSupported: false,
   canvasMaxAreaInBytes: -1,
@@ -36363,7 +35803,7 @@ const DefaultPartialEvaluatorOptions = Object.freeze({
   iccUrl: null,
   standardFontDataUrl: null,
   wasmUrl: null,
-  prepareWebGPU: null
+  hasGPU: false
 });
 const PatternType = {
   TILING: 1,
@@ -36492,11 +35932,9 @@ class PartialEvaluator {
     this._fetchBuiltInCMapBound = this.fetchBuiltInCMap.bind(this);
   }
   get _pdfFunctionFactory() {
-    const pdfFunctionFactory = new PDFFunctionFactory({
-      xref: this.xref,
-      isEvalSupported: this.options.isEvalSupported
-    });
-    return shadow(this, "_pdfFunctionFactory", pdfFunctionFactory);
+    return shadow(this, "_pdfFunctionFactory", new PDFFunctionFactory({
+      xref: this.xref
+    }));
   }
   get parsingType3Font() {
     return !!this.type3FontRefs;
@@ -37357,7 +36795,7 @@ class PartialEvaluator {
     }
     let patternIR;
     try {
-      const shadingFill = Pattern.parseShading(shading, this.xref, resources, this._pdfFunctionFactory, this.globalColorSpaceCache, localColorSpaceCache, this.options.prepareWebGPU);
+      const shadingFill = Pattern.parseShading(shading, this.xref, resources, this._pdfFunctionFactory, this.globalColorSpaceCache, localColorSpaceCache);
       patternIR = shadingFill.getIR();
     } catch (reason) {
       if (reason instanceof AbortException) {
@@ -40555,10 +39993,9 @@ function parseDefaultAppearance(str) {
   return new DefaultAppearanceEvaluator(str).parse();
 }
 class AppearanceStreamEvaluator extends EvaluatorPreprocessor {
-  constructor(stream, evaluatorOptions, xref, globalColorSpaceCache) {
+  constructor(stream, xref, globalColorSpaceCache) {
     super(stream);
     this.stream = stream;
-    this.evaluatorOptions = evaluatorOptions;
     this.xref = xref;
     this.globalColorSpaceCache = globalColorSpaceCache;
     this.resources = stream.dict?.get("Resources");
@@ -40655,15 +40092,13 @@ class AppearanceStreamEvaluator extends EvaluatorPreprocessor {
     return shadow(this, "_localColorSpaceCache", new LocalColorSpaceCache());
   }
   get _pdfFunctionFactory() {
-    const pdfFunctionFactory = new PDFFunctionFactory({
-      xref: this.xref,
-      isEvalSupported: this.evaluatorOptions.isEvalSupported
-    });
-    return shadow(this, "_pdfFunctionFactory", pdfFunctionFactory);
+    return shadow(this, "_pdfFunctionFactory", new PDFFunctionFactory({
+      xref: this.xref
+    }));
   }
 }
-function parseAppearanceStream(stream, evaluatorOptions, xref, globalColorSpaceCache) {
-  return new AppearanceStreamEvaluator(stream, evaluatorOptions, xref, globalColorSpaceCache).parse();
+function parseAppearanceStream(stream, xref, globalColorSpaceCache) {
+  return new AppearanceStreamEvaluator(stream, xref, globalColorSpaceCache).parse();
 }
 function getPdfColor(color, isFill) {
   if (color[0] === color[1] && color[1] === color[2]) {
@@ -40878,11 +40313,13 @@ class FakeUnicodeFont {
 }
 
 ;// ./src/shared/scripting_utils.js
+/* unused harmony import specifier */ var scripting_utils_MathClamp;
+
 function makeColorComp(n) {
-  return Math.floor(Math.max(0, Math.min(1, n)) * 255).toString(16).padStart(2, "0");
+  return Math.floor(scripting_utils_MathClamp(n, 0, 1) * 255).toString(16).padStart(2, "0");
 }
 function scaleAndClamp(x) {
-  return Math.max(0, Math.min(255, 255 * x));
+  return scripting_utils_MathClamp(x, 0, 1) * 255;
 }
 class ColorConverters {
   static CMYK_G([c, y, m, k]) {
@@ -43075,7 +42512,7 @@ class Catalog {
     return shadow(this, "destinations", dests);
   }
   getDestination(id) {
-    if (this.hasOwnProperty("destinations")) {
+    if (Object.hasOwn(this, "destinations")) {
       return this.destinations[id] ?? null;
     }
     const rawDests = this.#readDests();
@@ -44278,6 +43715,7 @@ const NamespaceIds = {
 
 ;// ./src/core/xfa/utils.js
 
+
 const dimConverters = {
   pt: x => x,
   cm: x => x / 2.54 * 72,
@@ -45142,7 +44580,7 @@ class XFAObject {
     return false;
   }
   [$onChildCheck](child) {
-    return this.hasOwnProperty(child[$nodeName]) && child[$namespaceId] === this[$namespaceId];
+    return Object.hasOwn(this, child[$nodeName]) && child[$namespaceId] === this[$namespaceId];
   }
   [$isNsAgnostic]() {
     return false;
@@ -45190,7 +44628,7 @@ class XFAObject {
     this[_children].splice(i, 1);
   }
   [$hasSettableValue]() {
-    return this.hasOwnProperty("value");
+    return Object.hasOwn(this, "value");
   }
   [$setValue](_) {}
   [$onText](_) {}
@@ -45628,7 +45066,7 @@ class XmlObject extends XFAObject {
       for (const [attrName, value] of Object.entries(attributes)) {
         map.set(attrName, new XFAAttribute(this, attrName, value));
       }
-      if (attributes.hasOwnProperty($nsAttributes)) {
+      if (Object.hasOwn(attributes, $nsAttributes)) {
         const dataNode = attributes[$nsAttributes].xfa.dataNode;
         if (dataNode !== undefined) {
           if (dataNode === "dataGroup") {
@@ -46165,7 +45603,7 @@ function toStyle(node, ...names) {
     if (value === null) {
       continue;
     }
-    if (converters.hasOwnProperty(name)) {
+    if (Object.hasOwn(converters, name)) {
       converters[name](node, style);
       continue;
     }
@@ -51140,7 +50578,7 @@ class Variables extends XFAObject {
 }
 class TemplateNamespace {
   static [$buildXFAObject](name, attributes) {
-    if (TemplateNamespace.hasOwnProperty(name)) {
+    if (Object.hasOwn(TemplateNamespace, name)) {
       const node = TemplateNamespace[name](attributes);
       node[$setSetAttributes](attributes);
       return node;
@@ -51577,7 +51015,7 @@ class Binder {
     return null;
   }
   _setProperties(formNode, dataNode) {
-    if (!formNode.hasOwnProperty("setProperty")) {
+    if (!Object.hasOwn(formNode, "setProperty")) {
       return;
     }
     for (const {
@@ -51629,7 +51067,7 @@ class Binder {
         targetParent[name] = obj[name];
         continue;
       }
-      if (!targetNode.hasOwnProperty($content)) {
+      if (!Object.hasOwn(targetNode, $content)) {
         warn(`XFA - Invalid node to use in setProperty`);
         continue;
       }
@@ -51639,7 +51077,7 @@ class Binder {
     }
   }
   _bindItems(formNode, dataNode) {
-    if (!formNode.hasOwnProperty("items") || !formNode.hasOwnProperty("bindItems") || formNode.bindItems.isEmpty()) {
+    if (!Object.hasOwn(formNode, "items") || !Object.hasOwn(formNode, "bindItems") || formNode.bindItems.isEmpty()) {
       return;
     }
     for (const item of formNode.items.children) {
@@ -52961,7 +52399,7 @@ class Zpl extends XFAObject {
 }
 class ConfigNamespace {
   static [$buildXFAObject](name, attributes) {
-    if (ConfigNamespace.hasOwnProperty(name)) {
+    if (Object.hasOwn(ConfigNamespace, name)) {
       return ConfigNamespace[name](attributes);
     }
     return undefined;
@@ -53503,7 +52941,7 @@ class XsdConnection extends XFAObject {
 }
 class ConnectionSetNamespace {
   static [$buildXFAObject](name, attributes) {
-    if (ConnectionSetNamespace.hasOwnProperty(name)) {
+    if (Object.hasOwn(ConnectionSetNamespace, name)) {
       return ConnectionSetNamespace[name](attributes);
     }
     return undefined;
@@ -53575,7 +53013,7 @@ class Datasets extends XFAObject {
 }
 class DatasetsNamespace {
   static [$buildXFAObject](name, attributes) {
-    if (DatasetsNamespace.hasOwnProperty(name)) {
+    if (Object.hasOwn(DatasetsNamespace, name)) {
       return DatasetsNamespace[name](attributes);
     }
     return undefined;
@@ -53757,7 +53195,7 @@ class TypeFaces extends XFAObject {
 }
 class LocaleSetNamespace {
   static [$buildXFAObject](name, attributes) {
-    if (LocaleSetNamespace.hasOwnProperty(name)) {
+    if (Object.hasOwn(LocaleSetNamespace, name)) {
       return LocaleSetNamespace[name](attributes);
     }
     return undefined;
@@ -53847,7 +53285,7 @@ class signature_Signature extends XFAObject {
 }
 class SignatureNamespace {
   static [$buildXFAObject](name, attributes) {
-    if (SignatureNamespace.hasOwnProperty(name)) {
+    if (Object.hasOwn(SignatureNamespace, name)) {
       return SignatureNamespace[name](attributes);
     }
     return undefined;
@@ -53868,7 +53306,7 @@ class Stylesheet extends XFAObject {
 }
 class StylesheetNamespace {
   static [$buildXFAObject](name, attributes) {
-    if (StylesheetNamespace.hasOwnProperty(name)) {
+    if (Object.hasOwn(StylesheetNamespace, name)) {
       return StylesheetNamespace[name](attributes);
     }
     return undefined;
@@ -53902,7 +53340,7 @@ class xdp_Xdp extends XFAObject {
 }
 class XdpNamespace {
   static [$buildXFAObject](name, attributes) {
-    if (XdpNamespace.hasOwnProperty(name)) {
+    if (Object.hasOwn(XdpNamespace, name)) {
       return XdpNamespace[name](attributes);
     }
     return undefined;
@@ -54265,7 +53703,7 @@ class Ul extends XhtmlObject {
 }
 class XhtmlNamespace {
   static [$buildXFAObject](name, attributes) {
-    if (XhtmlNamespace.hasOwnProperty(name)) {
+    if (Object.hasOwn(XhtmlNamespace, name)) {
       return XhtmlNamespace[name](attributes);
     }
     return undefined;
@@ -54409,7 +53847,7 @@ class Builder {
     if (prefixes) {
       this._addNamespacePrefix(prefixes);
     }
-    if (attributes.hasOwnProperty($nsAttributes)) {
+    if (Object.hasOwn(attributes, $nsAttributes)) {
       const dataTemplate = NamespaceSetUp.datasets;
       const nsAttrs = attributes[$nsAttributes];
       let xfaAttrs = null;
@@ -57334,7 +56772,6 @@ class FreeTextAnnotation extends MarkupAnnotation {
     this.data.noHTML = false;
     const {
       annotationGlobals,
-      evaluatorOptions,
       xref
     } = params;
     this.setDefaultAppearance(params);
@@ -57343,7 +56780,7 @@ class FreeTextAnnotation extends MarkupAnnotation {
       const {
         fontColor,
         fontSize
-      } = parseAppearanceStream(this.appearance, evaluatorOptions, xref, annotationGlobals.globalColorSpaceCache);
+      } = parseAppearanceStream(this.appearance, xref, annotationGlobals.globalColorSpaceCache);
       this.data.defaultAppearanceData.fontColor = fontColor;
       this.data.defaultAppearanceData.fontSize = fontSize || 10;
     } else {
@@ -60584,7 +60021,6 @@ class XRef {
 
 const LETTER_SIZE_MEDIABOX = [0, 0, 612, 792];
 class Page {
-  #areAnnotationsCached = false;
   #resourcesPromise = null;
   constructor({
     pdfManager,
@@ -61122,7 +60558,6 @@ class Page {
       }
       return sortedAnnotations;
     });
-    this.#areAnnotationsCached = true;
     return shadow(this, "_parsedAnnotations", promise);
   }
   get jsActions() {
@@ -61133,7 +60568,7 @@ class Page {
     const {
       pageIndex
     } = this;
-    if (this.#areAnnotationsCached) {
+    if (Object.hasOwn(this, "_parsedAnnotations")) {
       const cachedAnnotations = await this._parsedAnnotations;
       for (const {
         data
@@ -61146,6 +60581,7 @@ class Page {
       return;
     }
     const annots = await this.pdfManager.ensure(this, "annotations");
+    let partialEvaluator;
     for (const annotationRef of annots) {
       promises.push(AnnotationFactory.create(this.xref, annotationRef, annotationGlobals, this._localIdFactory, false, null, types, this.ref).then(async annotation => {
         if (!annotation) {
@@ -61153,7 +60589,7 @@ class Page {
         }
         annotation.data.pageIndex = pageIndex;
         if (annotation.hasTextContent && annotation.viewable) {
-          const partialEvaluator = this.#createPartialEvaluator(handler);
+          partialEvaluator ??= this.#createPartialEvaluator(handler);
           await annotation.extractTextContent(partialEvaluator, task, [-Infinity, -Infinity, Infinity, Infinity]);
         }
         return annotation.data;
@@ -62009,6 +61445,7 @@ class PDFDocument {
 
 
 
+
 function parseDocBaseUrl(url) {
   if (url) {
     const absoluteUrl = createValidAbsoluteUrl(url);
@@ -62034,16 +61471,6 @@ class BasePdfManager {
     this.enableXfa = enableXfa;
     evaluatorOptions.isOffscreenCanvasSupported &&= FeatureTest.isOffscreenCanvasSupported;
     evaluatorOptions.isImageDecoderSupported &&= FeatureTest.isImageDecoderSupported;
-    if (evaluatorOptions.enableWebGPU) {
-      let prepareWebGPUSent = false;
-      evaluatorOptions.prepareWebGPU = () => {
-        if (!prepareWebGPUSent) {
-          prepareWebGPUSent = true;
-          handler.send("PrepareWebGPU", null);
-        }
-      };
-    }
-    delete evaluatorOptions.enableWebGPU;
     this.evaluatorOptions = Object.freeze(evaluatorOptions);
     ImageResizer.setOptions(evaluatorOptions);
     JpegStream.setOptions(evaluatorOptions);
@@ -62057,6 +61484,7 @@ class BasePdfManager {
     CmykICCBasedCS.setOptions(options);
     JBig2CCITTFaxWasmImage.setOptions(options);
     PDFFunctionFactory.setOptions(options);
+    Pattern.setOptions(options);
   }
   get docId() {
     return this._docId;
@@ -62667,7 +62095,7 @@ async function writeValue(value, buffer, transform) {
     }
     buffer.push(`(${escapeString(value)})`);
   } else if (typeof value === "number") {
-    buffer.push(value.toString());
+    buffer.push(value.toFixed(10).replace(/\.?0+$/, ""));
   } else if (typeof value === "boolean") {
     buffer.push(value.toString());
   } else if (value instanceof Dict) {
@@ -64917,9 +64345,9 @@ class PDFEditor {
     const infoMap = this.#makeInfo();
     const [encryptRef, encrypt, fileIds] = await this.#makeEncrypt();
     const [changes, xrefTableRef] = await this.#createChanges();
-    const header = [...`%PDF-${this.version}\n%`.split("").map(c => c.charCodeAt(0)), 0xfa, 0xde, 0xfa, 0xce];
+    const header = stringToBytes(`%PDF-${this.version}\n%\xfa\xde\xfa\xce`);
     return incrementalUpdate({
-      originalData: new Uint8Array(header),
+      originalData: header,
       changes,
       xrefInfo: {
         startXRef: null,
@@ -65167,7 +64595,7 @@ class WorkerMessageHandler {
       docId,
       apiVersion
     } = docParams;
-    const workerVersion = "5.6.224";
+    const workerVersion = "5.7.85";
     if (apiVersion !== workerVersion) {
       throw new Error(`The API version "${apiVersion}" does not match ` + `the Worker version "${workerVersion}".`);
     }

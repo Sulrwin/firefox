@@ -57,14 +57,11 @@ class SearchSuggestionsProvidersBuilder(
     private val selectTabUseCase: TabsUseCases.SelectTabUseCase,
     private val suggestionsStringsProvider: SuggestionsStringsProvider,
     private val suggestionIconProvider: SuggestionIconProvider,
-    onSearchEngineShortcutSelected: (searchEngine: SearchEngine) -> Unit,
     onSearchEngineSuggestionSelected: (searchEngine: SearchEngine) -> Unit,
-    onSearchEngineSettingsClicked: () -> Unit,
 ) {
     val engineForSpeculativeConnects: Engine?
     val defaultHistoryStorageProvider: HistoryStorageSuggestionProvider
     val defaultCombinedHistoryProvider: CombinedHistorySuggestionProvider
-    val shortcutsEnginePickerProvider: ShortcutsSuggestionProvider
     val defaultSearchSuggestionProvider: SearchSuggestionProvider
     val defaultTrendingSearchProvider: TrendingSearchProvider
     val defaultSearchActionProvider: SearchActionProvider
@@ -132,15 +129,6 @@ class SearchSuggestionsProvidersBuilder(
                 icon = searchBitmap,
                 showDescription = false,
                 suggestionsHeader = suggestionsStringsProvider.forSearchEngineSuggestion(),
-            )
-
-        shortcutsEnginePickerProvider =
-            ShortcutsSuggestionProvider(
-                store = components.core.store,
-                settingsIcon = suggestionIconProvider.getSettingsIconBitmap(),
-                searchShortcutsSettingsTitle = suggestionsStringsProvider.searchShortcutsSettingsTitle(),
-                selectShortcutEngine = onSearchEngineShortcutSelected,
-                selectShortcutEngineSettings = onSearchEngineSettingsClicked,
             )
 
         searchEngineSuggestionProvider =
@@ -536,7 +524,6 @@ class SearchSuggestionsProvidersBuilder(
     /**
      * Data based on which the search suggestions providers list should be built.
      *
-     * @property showSearchShortcuts Whether to show the search shortcuts.
      * @property showSearchTermHistory Whether to show the search term history.
      * @property showHistorySuggestionsForCurrentEngine Whether to show history suggestions
      * for the current search engine.
@@ -561,7 +548,6 @@ class SearchSuggestionsProvidersBuilder(
      * @property searchEngineSource Hoe the current search engine was selected.
      */
     data class SearchProviderState(
-        val showSearchShortcuts: Boolean,
         val showSearchTermHistory: Boolean,
         val showHistorySuggestionsForCurrentEngine: Boolean,
         val showAllHistorySuggestions: Boolean,

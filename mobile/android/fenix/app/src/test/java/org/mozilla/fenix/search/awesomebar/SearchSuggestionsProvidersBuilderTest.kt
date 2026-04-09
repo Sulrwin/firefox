@@ -73,9 +73,7 @@ class SearchSuggestionsProvidersBuilderTest {
             selectTabUseCase = mockk(),
             suggestionsStringsProvider = suggestionsStringsProvider,
             suggestionIconProvider = mockk(relaxed = true),
-            onSearchEngineShortcutSelected = {},
             onSearchEngineSuggestionSelected = {},
-            onSearchEngineSettingsClicked = {},
         )
     }
 
@@ -306,7 +304,6 @@ class SearchSuggestionsProvidersBuilderTest {
         }
         every { components.settings } returns settings
         val state = getSearchProviderState(
-            showSearchShortcuts = false,
             showHistorySuggestionsForCurrentEngine = false,
             showBookmarksSuggestionsForCurrentEngine = false,
             showSyncedTabsSuggestionsForCurrentEngine = false,
@@ -332,7 +329,6 @@ class SearchSuggestionsProvidersBuilderTest {
         }
         every { components.settings } returns settings
         val state = getSearchProviderState(
-            showSearchShortcuts = false,
             showHistorySuggestionsForCurrentEngine = false,
             showBookmarksSuggestionsForCurrentEngine = false,
             showSyncedTabsSuggestionsForCurrentEngine = false,
@@ -358,7 +354,6 @@ class SearchSuggestionsProvidersBuilderTest {
         }
         every { components.settings } returns settings
         val state = getSearchProviderState(
-            showSearchShortcuts = false,
             showHistorySuggestionsForCurrentEngine = false,
             showAllHistorySuggestions = false,
             showBookmarksSuggestionsForCurrentEngine = false,
@@ -390,7 +385,6 @@ class SearchSuggestionsProvidersBuilderTest {
         }
         every { components.settings } returns settings
         val state = getSearchProviderState(
-            showSearchShortcuts = false,
             showHistorySuggestionsForCurrentEngine = false,
             showAllHistorySuggestions = false,
             showBookmarksSuggestionsForCurrentEngine = false,
@@ -422,7 +416,6 @@ class SearchSuggestionsProvidersBuilderTest {
         }
         every { components.settings } returns settings
         val state = getSearchProviderState(
-            showSearchShortcuts = false,
             showAllHistorySuggestions = false,
             showAllBookmarkSuggestions = false,
             showAllSyncedTabsSuggestions = false,
@@ -452,7 +445,6 @@ class SearchSuggestionsProvidersBuilderTest {
         }
         every { components.settings } returns settings
         val state = getSearchProviderState(
-            showSearchShortcuts = false,
             showAllHistorySuggestions = false,
             showAllBookmarkSuggestions = false,
             showAllSyncedTabsSuggestions = false,
@@ -482,7 +474,6 @@ class SearchSuggestionsProvidersBuilderTest {
         }
         every { components.settings } returns settings
         val state = getSearchProviderState(
-            showSearchShortcuts = false,
             showSearchTermHistory = false,
             showHistorySuggestionsForCurrentEngine = false,
             showBookmarksSuggestionsForCurrentEngine = false,
@@ -512,7 +503,6 @@ class SearchSuggestionsProvidersBuilderTest {
         }
         every { components.settings } returns settings
         val state = getSearchProviderState(
-            showSearchShortcuts = false,
             showSearchTermHistory = false,
             showHistorySuggestionsForCurrentEngine = false,
             showBookmarksSuggestionsForCurrentEngine = false,
@@ -542,7 +532,6 @@ class SearchSuggestionsProvidersBuilderTest {
         }
         every { components.settings } returns settings
         val state = getSearchProviderState(
-            showSearchShortcuts = false,
             showSearchTermHistory = false,
             showHistorySuggestionsForCurrentEngine = false,
             showAllHistorySuggestions = false,
@@ -570,7 +559,6 @@ class SearchSuggestionsProvidersBuilderTest {
         }
         every { components.settings } returns settings
         val state = getSearchProviderState(
-            showSearchShortcuts = false,
             showSearchTermHistory = false,
             showHistorySuggestionsForCurrentEngine = false,
             showAllHistorySuggestions = false,
@@ -598,7 +586,6 @@ class SearchSuggestionsProvidersBuilderTest {
         }
         every { components.settings } returns settings
         val state = getSearchProviderState(
-            showSearchShortcuts = false,
             showSearchTermHistory = false,
             showHistorySuggestionsForCurrentEngine = false,
             showAllHistorySuggestions = false,
@@ -628,7 +615,6 @@ class SearchSuggestionsProvidersBuilderTest {
         }
         every { components.settings } returns settings
         val state = getSearchProviderState(
-            showSearchShortcuts = false,
             showSearchTermHistory = false,
             showHistorySuggestionsForCurrentEngine = false,
             showAllHistorySuggestions = false,
@@ -1072,7 +1058,6 @@ class SearchSuggestionsProvidersBuilderTest {
         every { browsingModeManager.mode } returns BrowsingMode.Normal
         val state = getSearchProviderState(
             showHistorySuggestionsForCurrentEngine = false,
-            showSearchShortcuts = false,
             showAllHistorySuggestions = false,
             showBookmarksSuggestionsForCurrentEngine = false,
             showAllBookmarkSuggestions = false,
@@ -1542,7 +1527,6 @@ class SearchSuggestionsProvidersBuilderTest {
  * Get a default [SearchProviderState] that by default will ask for all types of suggestions.
  */
 private fun getSearchProviderState(
-    showSearchShortcuts: Boolean = true,
     showSearchTermHistory: Boolean = true,
     showHistorySuggestionsForCurrentEngine: Boolean = true,
     showAllHistorySuggestions: Boolean = true,
@@ -1562,7 +1546,6 @@ private fun getSearchProviderState(
     showTrendingSearches: Boolean = true,
     showRecentSearches: Boolean = true,
 ) = SearchProviderState(
-    showSearchShortcuts = showSearchShortcuts,
     showSearchTermHistory = showSearchTermHistory,
     showHistorySuggestionsForCurrentEngine = showHistorySuggestionsForCurrentEngine,
     showAllHistorySuggestions = showAllHistorySuggestions,
